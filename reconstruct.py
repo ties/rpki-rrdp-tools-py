@@ -1,4 +1,5 @@
 import argparse
+import base64
 import logging
 import os
 import sys
@@ -30,8 +31,8 @@ def reconstruct_repo(rrdp_file: TextIO, output_path: str):
         if not os.path.isdir(target_dir):
             os.makedirs(target_dir)
 
-        with open(file_path, 'w') as f:
-            f.write(elem.text)
+        with open(file_path, 'wb') as f:
+            f.write(base64.b64decode(elem.text))
 
         LOG.info("Wrote '%s' to '%s'", uri, file_path)
 
