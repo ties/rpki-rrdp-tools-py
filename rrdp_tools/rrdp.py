@@ -74,4 +74,4 @@ delta_element |= element withdraw {
 
 
 def validate(doc) -> None:
-    SCHEMA.assert_(doc)
+    SCHEMA.assertValid(doc)

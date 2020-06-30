@@ -1,0 +1,9 @@
+<notification xmlns="http://www.ripe.net/rpki/rrdp" version="1" session_id="576e032e-e1d1-4484-8151-21b04cc42ce1" serial="111">
+  <snapshot uri="https://rrdp.rpki.nlnetlabs.nl/rrdp/576e032e-e1d1-4484-8151-21b04cc42ce1/111/snapshot.xml" hash="d535462234d739e78e9760cac035764d105e35c70ad162c7aac55223880fb7ad" />
+  <delta serial="111" uri="https://rrdp.rpki.nlnetlabs.nl/rrdp/576e032e-e1d1-4484-8151-21b04cc42ce1/111/delta.xml" hash="533757d879ced66e684bce70a4b5efe5f720db2de0d256f269bd0079e01abdce" />
+  <delta serial="110" uri="https://rrdp.rpki.nlnetlabs.nl/rrdp/576e032e-e1d1-4484-8151-21b04cc42ce1/110/delta.xml" hash="49732ebd30d8491359d9404eacfd3a3ec88edb4366a6b8ba2f319e452bba876e" />
+  <delta serial="109" uri="https://rrdp.rpki.nlnetlabs.nl/rrdp/576e032e-e1d1-4484-8151-21b04cc42ce1/109/delta.xml" hash="cbb54fc5b3fbdd77d9725f214652eb209ee1c5aba940653525659ab07f8fe497" />
+  <delta serial="108" uri="https://rrdp.rpki.nlnetlabs.nl/rrdp/576e032e-e1d1-4484-8151-21b04cc42ce1/108/delta.xml" hash="a547555672c7bbb9a2baa52c66c613ede5d264c653993443bc6fb4d076d968a0" />
+  <delta serial="107" uri="https://rrdp.rpki.nlnetlabs.nl/rrdp/576e032e-e1d1-4484-8151-21b04cc42ce1/107/delta.xml" hash="4f3f67cde334d22f87826f2bd76e9254824657d2e073c9417aeb59e1ed4e9420" />
+  <delta serial="106" uri="https://rrdp.rpki.nlnetlabs.nl/rrdp/576e032e-e1d1-4484-8151-21b04cc42ce1/106/delta.xml" hash="c65957cbb85b22552e7cfaad5b537025928de433552030d3c06ebf0455d3b8f8" />
+</notification>

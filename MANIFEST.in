@@ -1,0 +1,16 @@
+graft rrdp_tools
+graft tests
+
+include README.md
+include LICENSE.txt
+
+include .coveragerc .flake8 setup.cfg pyproject.toml
+include .pre-commit-config.yaml pylintrc
+include tox.ini appveyor.yml .travis.yml rtd.txt
+include azure-pipelines.yml pytest.ini
+
+exclude requirements*
+exclude pyproject.toml .gitkeep .isort.cfg Pipfile.lock
+
+global-exclude __pycache__ *.py[cod]
+global-exclude .DS_Store

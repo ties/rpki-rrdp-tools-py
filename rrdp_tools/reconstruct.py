@@ -1,9 +1,10 @@
 import argparse
 import base64
 import logging
-import os
 import sys
 import urllib.parse
+
+from pathlib import Path
 
 from lxml import etree
 from rrdp import validate
@@ -14,7 +15,7 @@ logging.basicConfig()
 LOG = logging.getLogger(__name__)
 
 
-def reconstruct_repo(rrdp_file: TextIO, output_path: str):
+def reconstruct_repo(rrdp_file: TextIO, output_path: Path):
     doc = etree.parse(rrdp_file)
     validate(doc)
     # Document is valid,
@@ -24,12 +25,11 @@ def reconstruct_repo(rrdp_file: TextIO, output_path: str):
         uri = elem.attrib['uri']
         # Take the path component of the URI and build the directory for it
         tokens = urllib.parse.urlparse(uri)
-        file_path = os.path.normpath(os.path.join(output_path, f"./{tokens.path}"))
 
-        target_dir = os.path.dirname(file_path)
-
-        if not os.path.isdir(target_dir):
-            os.makedirs(target_dir)
+        file_path = output_path / f"./{tokens.path}"
+        # Ensure that output dir is a subdirectory and create if necessary
+        assert output_path in file_path.parents
+        file_path.parent.mkdir(parents=True, exist_ok=True)
 
         with open(file_path, 'wb') as f:
             f.write(base64.b64decode(elem.text))
@@ -49,14 +49,16 @@ def main():
                         help='output directory',
                         )
 
-
     args = parser.parse_args()
-    if not os.path.isdir(args.output_dir):
+    output_dir = Path(args.output_dir).resolve()
+
+    if not output_dir.is_dir():
+        LOG.error("Output directory {} does not exist", args.output_dir)
         parser.print_help()
         sys.exit(2)
 
     reconstruct_repo(args.infile,
-                     os.path.abspath(args.output_dir))
+                     output_dir)
 
 
 if __name__ == "__main__":
