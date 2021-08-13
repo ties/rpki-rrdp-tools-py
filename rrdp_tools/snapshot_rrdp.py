@@ -11,7 +11,7 @@ from pathlib import Path
 from lxml import etree
 from rrdp import validate
 
-from typing import TextIO
+from typing import TextIO, Optional
 
 import requests
 
@@ -19,7 +19,10 @@ logging.basicConfig()
 LOG = logging.getLogger(__name__)
 LOG.setLevel(logging.INFO)
 
-def get_and_check(target_file: Path, uri: str, sha256: str) -> None:
+def get_and_check(target_file: Path,
+                  uri: str,
+                  sha256: str,
+                  override_host: Optional[str]) -> None:
     expected_hash = sha256.lower()
 
     if target_file.exists():
@@ -30,6 +33,16 @@ def get_and_check(target_file: Path, uri: str, sha256: str) -> None:
                 return
             else:
                 LOG.info("Hash mismatch for %s", uri)
+
+    if override_host:
+        # override the URI
+        tokens = list(urllib.parse.urlparse(uri))
+        override_tokens = urllib.parse.urlparse(override_host)
+        # [scheme, host, ...]
+        tokens[0] = override_tokens[0]
+        tokens[1] = override_tokens[1]
+
+        uri = urllib.parse.urlunparse(tokens)
 
     LOG.debug("Getting %s h=%s target_file=%s", uri, expected_hash, target_file)
 
@@ -47,13 +60,18 @@ def get_and_check(target_file: Path, uri: str, sha256: str) -> None:
     with target_file.open("wb") as f:
         f.write(res.content)
 
-def snapshot_rrdp(notification_url: str, output_path: Path):
+def snapshot_rrdp(notification_url: str,
+                  output_path: Path,
+                  override_host: str):
     res = requests.get(notification_url)
     doc = etree.fromstring(res.text)
     validate(doc)
     # Document is valid,
     snapshot = doc.find("{http://www.ripe.net/rpki/rrdp}snapshot")
-    get_and_check(output_path / "snapshot.xml", snapshot.attrib["uri"], snapshot.attrib["hash"])
+    get_and_check(output_path / "snapshot.xml",
+                  snapshot.attrib["uri"],
+                  snapshot.attrib["hash"],
+                  override_host=override_host)
 
     LOG.info("Storing snapshot.xml")
     with (output_path / "notification.xml").open("w") as f:
@@ -61,11 +79,11 @@ def snapshot_rrdp(notification_url: str, output_path: Path):
 
     deltas = doc.findall("{http://www.ripe.net/rpki/rrdp}delta")
     for delta in deltas:
-        uri = delta.attrib['uri']
-        hash = delta.attrib['hash']
         serial = delta.attrib['serial']
-
-        get_and_check(output_path / f"{serial}.xml", uri, hash)
+        get_and_check(output_path / f"{serial}.xml",
+                      delta.attrib['uri'],
+                      delta.attrib['hash'],
+                      override_host=override_host)
 
 
 def main():
@@ -79,6 +97,9 @@ def main():
                         )
     parser.add_argument('output_dir',
                         help='output directory',
+                        )
+    parser.add_argument('--override_host',
+                        help='hostname to override',
                         )
     parser.add_argument('-v',
                         '--verbose',
@@ -98,7 +119,8 @@ def main():
         sys.exit(2)
 
     snapshot_rrdp(args.notification_url,
-                     output_dir)
+                  output_dir,
+                  override_host=args.override_host)
 
 
 if __name__ == "__main__":

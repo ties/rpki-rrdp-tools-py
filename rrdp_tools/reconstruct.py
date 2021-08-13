@@ -16,7 +16,10 @@ LOG = logging.getLogger(__name__)
 
 
 def reconstruct_repo(rrdp_file: TextIO, output_path: Path):
-    doc = etree.parse(rrdp_file)
+    huge_parser = etree.XMLParser(encoding='utf-8',
+                                  recover=False,
+                                  huge_tree=True)
+    doc = etree.parse(rrdp_file, parser=huge_parser)
     validate(doc)
     # Document is valid,
 
