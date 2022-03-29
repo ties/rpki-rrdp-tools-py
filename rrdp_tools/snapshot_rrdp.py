@@ -64,6 +64,10 @@ def snapshot_rrdp(notification_url: str,
                   output_path: Path,
                   override_host: str):
     res = requests.get(notification_url)
+    if res.status_code != 200:
+        print(f"HTTP {res.status_code} from RRDP server, aborting")
+        print(f"reason: {res.text}")
+        return
     doc = etree.fromstring(res.text)
     validate(doc)
     # Document is valid,
