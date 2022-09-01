@@ -48,14 +48,14 @@ def get_and_check(target_file: Path,
 
     t0 = time.time()
     res = requests.get(uri)
-    LOG.info("Downloaded %s in %fs", uri, time.time()-t0)
+    print("  * {:>11}b   {:.3f}s   {}".format(len(res.content), time.time()-t0, uri))
 
     assert res.status_code == 200
 
     digest = hashlib.sha256(res.content).hexdigest()
 
     if digest != expected_hash:
-        raise ValueError("Hash mismatch for %s, expected %s was %s", uri, expected_hash, digest)
+        raise ValueError("Hash mismatch. Expected %s actual %s", expected_hash, digest, uri)
 
     with target_file.open("wb") as f:
         f.write(res.content)
@@ -77,7 +77,6 @@ def snapshot_rrdp(notification_url: str,
                   snapshot.attrib["hash"],
                   override_host=override_host)
 
-    LOG.info("Storing snapshot.xml")
     with (output_path / "notification.xml").open("w") as f:
         f.write(res.text)
 
