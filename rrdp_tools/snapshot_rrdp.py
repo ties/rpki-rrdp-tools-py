@@ -62,7 +62,8 @@ def get_and_check(target_file: Path,
 
 def snapshot_rrdp(notification_url: str,
                   output_path: Path,
-                  override_host: str):
+                  override_host: str,
+                  skip_snapshot: bool = False):
     res = requests.get(notification_url)
     if res.status_code != 200:
         print(f"HTTP {res.status_code} from RRDP server, aborting")
@@ -71,14 +72,15 @@ def snapshot_rrdp(notification_url: str,
     doc = etree.fromstring(res.text)
     validate(doc)
     # Document is valid,
-    snapshot = doc.find("{http://www.ripe.net/rpki/rrdp}snapshot")
-    get_and_check(output_path / "snapshot.xml",
-                  snapshot.attrib["uri"],
-                  snapshot.attrib["hash"],
-                  override_host=override_host)
-
     with (output_path / "notification.xml").open("w") as f:
         f.write(res.text)
+
+    snapshot = doc.find("{http://www.ripe.net/rpki/rrdp}snapshot")
+    if not skip_snapshot:
+        get_and_check(output_path / "snapshot.xml",
+                      snapshot.attrib["uri"],
+                      snapshot.attrib["hash"],
+                      override_host=override_host)
 
     deltas = doc.findall("{http://www.ripe.net/rpki/rrdp}delta")
     for delta in deltas:
@@ -102,10 +104,14 @@ def main():
                         help='output directory',
                         )
     parser.add_argument('--override_host',
-                        help='hostname to override',
+                        help='[protocol]://hostname to override',
                         )
     parser.add_argument('-v',
                         '--verbose',
+                        help='verbose',
+                        action='store_true'
+                        )
+    parser.add_argument('--skip_snapshot',
                         help='verbose',
                         action='store_true'
                         )
@@ -123,7 +129,8 @@ def main():
 
     snapshot_rrdp(args.notification_url,
                   output_dir,
-                  override_host=args.override_host)
+                  override_host=args.override_host,
+                  skip_snapshot=args.skip_snapshot)
 
 
 if __name__ == "__main__":
