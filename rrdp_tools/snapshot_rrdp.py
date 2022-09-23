@@ -32,7 +32,7 @@ def get_and_check(target_file: Path,
                 LOG.debug("Already have %s as %s", uri, target_file)
                 return
             else:
-                LOG.info("Hash mismatch for %s", uri)
+                LOG.info("Hash for %s does not match, downloading %s", target_file, uri)
 
     if override_host:
         # override the URI
@@ -55,7 +55,7 @@ def get_and_check(target_file: Path,
     digest = hashlib.sha256(res.content).hexdigest()
 
     if digest != expected_hash:
-        raise ValueError("Hash mismatch. Expected %s actual %s", expected_hash, digest, uri)
+        raise ValueError("Hash mismatch for downloaded file. Expected %s actual %s", expected_hash, digest, uri)
 
     with target_file.open("wb") as f:
         f.write(res.content)
