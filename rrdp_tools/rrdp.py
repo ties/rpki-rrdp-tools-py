@@ -6,8 +6,8 @@ import hashlib
 
 from lxml import etree
 from lxml.etree import RelaxNG
-from dataclasses import dataclass
-from typing import Generator, NamedTuple, Optional, TextIO
+from dataclasses import dataclass, InitVar
+from typing import Generator, Optional, TextIO
 
 
 NS_RRDP = "http://www.ripe.net/rpki/rrdp"
@@ -88,17 +88,24 @@ def validate(doc) -> None:
     SCHEMA.assert_(doc)
 
 
-class PublishElement(NamedTuple):
+@dataclass(unsafe_hash=True)
+class PublishElement:
     uri: str
     hash: Optional[str]
     content: bytes
-    h_content: str
+    h_content: str | None = None
+
+    def __post_init__(self) -> None:
+        h = hashlib.sha256()
+        h.update(self.content)
+        self.h_content = h.hexdigest()
 
     def __repr__(self) -> str:
-        return f"PublishElement[uri={self.uri}, hash={self.hash.hex() if self.hash else 'N/A'}, content={len(self.content)}b"
+        return f"PublishElement[uri={self.uri}, hash={self.hash.hex() if self.hash else 'N/A'}, sha256(content)={self.h_content}b"
 
 
-class WithdrawElement(NamedTuple):
+@dataclass(unsafe_hash=True)
+class WithdrawElement:
     uri: str
     hash: str
 
@@ -132,11 +139,9 @@ def parse_snapshot_or_delta(
                 LOG.error("withdraw uri=%s without hash provided.", uri)
             yield WithdrawElement(uri, hash)
         elif elem.tag == "{http://www.ripe.net/rpki/rrdp}publish":
-            h = hashlib.sha256()
-            h.update(content)
-            h_content = h.hexdigest()
+            pe = PublishElement(uri, hash, content)
 
             if hash and hash.lower() != h_content:
-                LOG.error("Hash mismatch: h(content)=%s attrib=%s", h_content, hash)
+                LOG.error("Hash mismatch: h(content)=%s attrib=%s", pe.h_content, hash)
 
-            yield PublishElement(uri, hash, content, h_content)
+            yield pe
