@@ -1,0 +1,22 @@
+[tool.poetry]
+name = "rrdp-tools"
+version = "0.1.0"
+description = ""
+authors = ["Ties de Kock <ties@tiesdekock.nl>"]
+readme = "README.md"
+packages = [{include = "rrdp_tools"}]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+requests = "^2.28.1"
+rnc2rng = "^2.6.6"
+lxml = "^4.9.1"
+
+[tool.poetry.group.dev.dependencies]
+ipdb = "^0.13.9"
+pre-commit = "^2.20.0"
+black = "^22.10.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
