@@ -13,39 +13,12 @@ from pathlib import Path
 from typing import TextIO, Dict, NamedTuple, Set
 
 from lxml import etree
-from rrdp import validate
+from rrdp import validate, NS_RRDP, parse_snapshot_or_delta, PublishElement
 import requests
+
 
 logging.basicConfig()
 LOG = logging.getLogger(__name__)
-
-NS_RRDP = "http://www.ripe.net/rpki/rrdp"
-
-
-class RrdpOperation(Enum):
-    PUBLISH = 1
-    WITHDRAW = 2
-
-    @staticmethod
-    def from_tag(xml_tag: str) -> "RrdpOperation":
-        if xml_tag in ("withdraw", "{http://www.ripe.net/rpki/rrdp}withdraw"):
-            return RrdpOperation.WITHDRAW
-        elif xml_tag in ("publish", "{http://www.ripe.net/rpki/rrdp}publish"):
-            return RrdpOperation.PUBLISH
-
-        raise ValueError(f"Unknown RRDP tag: '{xml_tag}'")
-
-
-class RrdpElement(NamedTuple):
-    uri: str
-    hash: str
-    operation: RrdpOperation
-
-    def __repr__(self) -> str:
-        if self.operation is RrdpOperation.PUBLISH:
-            return f"publish uri={self.uri} hash={self.hash}"
-        elif self.operation is RrdpOperation.WITHDRAW:
-            return f"withdraw uri={self.uri} hash={self.hash}"
 
 
 def http_get_delta_or_snapshot(uri: str) -> TextIO:
@@ -70,11 +43,6 @@ def http_get_delta_or_snapshot(uri: str) -> TextIO:
 
 
 def reconstruct_repo(rrdp_file: TextIO, output_path: Path, filter_match: str):
-    huge_parser = etree.XMLParser(encoding="utf-8", recover=False, huge_tree=True)
-    doc = etree.parse(rrdp_file, parser=huge_parser)
-    validate(doc)
-    # Document is valid,
-
     def match(uri) -> bool:
         """Match against the regex in `filter_match` (default: accept)."""
         if filter_match:
@@ -82,56 +50,35 @@ def reconstruct_repo(rrdp_file: TextIO, output_path: Path, filter_match: str):
             return filename_pattern.search(uri)
         return True
 
-    root = doc.xpath("/rrdp:snapshot | /rrdp:delta", namespaces={"rrdp": NS_RRDP})
-    if not root:
-        raise ValueError(
-            "XML is missing <snapshot> or <delta> tag in correct namespace."
-        )
-    elems = root[0].getchildren()
+    seen_objects: Dict[str, RrdpElement] = defaultdict(set)
     wrote = 0
 
-    seen_objects: Dict[str, Set[RrdpElement]] = defaultdict(set)
-    for elem in elems:
-        uri = elem.attrib["uri"]
-        hash = elem.attrib.get("hash", None)
-        operation = RrdpOperation.from_tag(elem.tag)
-        # Take the path component of the URI and build the directory for it
-        tokens = urllib.parse.urlparse(uri)
-        content = base64.b64decode(elem.text) if elem.text else b""
-
-        h = hashlib.sha256()
-        h.update(content)
-        h_content = h.hexdigest()
-
-        if hash and h_content.lower() != hash:
-            LOG.error("Hash mismatch: h(content)=%s attrib=%s", h_content, hash)
-        if operation is RrdpOperation.WITHDRAW and not hash:
-            LOG.error("withdraw uri=%s without hash.", uri)
-
-        if uri in seen_objects:
+    for elem in parse_snapshot_or_delta(rrdp_file):
+        if elem.uri in seen_objects:
             LOG.error(
-                "Repeated entry for uri=%s.  h=%s. previous entries: %s",
-                uri,
-                h_content,
-                seen_objects[uri],
+                "Repeated entry: %s. previous entries: %s",
+                elem,
+                seen_objects[elem.uri],
             )
 
-        seen_objects[uri].add(RrdpElement(uri, hash if hash else h_content, operation))
+        seen_objects[elem.uri].add(elem)
 
-        file_path = output_path / f"./{tokens.path}"
-        if match(uri):
-            # Ensure that output dir is a subdirectory and create if necessary
-            assert output_path in file_path.parents
-            file_path.parent.mkdir(parents=True, exist_ok=True)
+        if isinstance(elem, PublishElement):
+            if match(elem.uri):
+                tokens = urllib.parse.urlparse(elem.uri)
+                file_path = output_path / f"./{tokens.path}"
+                # Ensure that output dir is a subdirectory and create if necessary
+                assert output_path in file_path.parents
+                file_path.parent.mkdir(parents=True, exist_ok=True)
 
-            with open(file_path, "wb") as f:
-                # Accept empty publish tags/empty files
-                f.write(content)
+                with open(file_path, "wb") as f:
+                    # Accept empty publish tags/empty files
+                    f.write(elem.content)
 
-            LOG.debug("Wrote '%s' to '%s'", uri, file_path)
-            wrote += 1
-        else:
-            LOG.debug("skipped '%s': did not match filter.", uri)
+                LOG.debug("Wrote '%s' to '%s'", elem.uri, file_path)
+                wrote += 1
+            else:
+                LOG.debug("skipped '%s': did not match filter.", elem.uri)
 
     LOG.info("Wrote %i files to %s", wrote, output_path)
 

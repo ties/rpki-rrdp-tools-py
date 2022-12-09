@@ -1,9 +1,19 @@
 """
 https://tools.ietf.org/html/rfc8182
 """
-from lxml.etree import RelaxNG
+import base64
+import hashlib
 
-SCHEMA = RelaxNG.from_rnc_string("""#
+from lxml import etree
+from lxml.etree import RelaxNG
+from dataclasses import dataclass
+from typing import Generator, NamedTuple, Optional, TextIO
+
+
+NS_RRDP = "http://www.ripe.net/rpki/rrdp"
+
+SCHEMA = RelaxNG.from_rnc_string(
+    """#
 # RELAX NG schema for the RPKI Repository Delta Protocol (RRDP).
 #
 
@@ -70,8 +80,63 @@ delta_element |= element withdraw {
 # comment-start: "# "
 # comment-start-skip: "#[ \\t]*"
 # End:
-""")
+"""
+)
 
 
 def validate(doc) -> None:
     SCHEMA.assert_(doc)
+
+
+class PublishElement(NamedTuple):
+    uri: str
+    hash: Optional[str]
+    content: bytes
+    h_content: str
+
+    def __repr__(self) -> str:
+        return f"PublishElement[uri={self.uri}, hash={self.hash.hex() if self.hash else 'N/A'}, content={len(self.content)}b"
+
+
+class WithdrawElement(NamedTuple):
+    uri: str
+    hash: str
+
+    def __repr__(self) -> str:
+        return f"WithdrawElement[uri={self.uri}, hash={self.hash.hex()}"
+
+
+RrdpElement = PublishElement | WithdrawElement
+
+
+def parse_snapshot_or_delta(
+    snapshot_or_delta: TextIO,
+) -> Generator[WithdrawElement | PublishElement, None, None]:
+    huge_parser = etree.XMLParser(encoding="utf-8", recover=False, huge_tree=True)
+    doc = etree.parse(snapshot_or_delta, parser=huge_parser)
+    validate(doc)
+    # Document is valid
+
+    nodes = doc.xpath("/rrdp:snapshot | /rrdp:delta", namespaces={"rrdp": NS_RRDP})
+    assert len(nodes) == 1
+    root = nodes[0]
+
+    for elem in root.getchildren():
+        uri = elem.attrib["uri"]
+        hash = elem.get("hash", None)
+
+        content = base64.b64decode(elem.text) if elem.text else b""
+
+        if elem.tag == "{http://www.ripe.net/rpki/rrdp}withdraw":
+            if not hash:
+                LOG.error("withdraw uri=%s without hash provided.", uri)
+            yield WithdrawElement(uri, hash)
+        elif elem.tag == "{http://www.ripe.net/rpki/rrdp}publish":
+            h = hashlib.sha256()
+            h.update(content)
+            h_content = h.hexdigest()
+
+            if hash and hash.lower() != h_content:
+                LOG.error("Hash mismatch: h(content)=%s attrib=%s", h_content, hash)
+
+            yield PublishElement(uri, hash, content, h_content)
