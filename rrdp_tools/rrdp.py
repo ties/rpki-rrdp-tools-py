@@ -3,12 +3,15 @@ https://tools.ietf.org/html/rfc8182
 """
 import base64
 import hashlib
+import logging
 
 from lxml import etree
 from lxml.etree import RelaxNG
 from dataclasses import dataclass, InitVar
 from typing import Generator, Optional, TextIO
 
+
+LOG = logging.getLogger(__name__)
 
 NS_RRDP = "http://www.ripe.net/rpki/rrdp"
 
@@ -141,7 +144,7 @@ def parse_snapshot_or_delta(
         elif elem.tag == "{http://www.ripe.net/rpki/rrdp}publish":
             pe = PublishElement(uri, hash, content)
 
-            if hash and hash.lower() != h_content:
+            if hash and hash.lower() != pe.h_content:
                 LOG.error("Hash mismatch: h(content)=%s attrib=%s", pe.h_content, hash)
 
             yield pe
