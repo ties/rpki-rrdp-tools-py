@@ -136,7 +136,7 @@ class NotificationElement:
     session_id: str
 
 
-RrdpElement = PublishElement | WithdrawElement
+RrdpElement = Union[PublishElement, WithdrawElement]
 
 
 def parse_notification_file(notificiation_file: TextIO) -> NotificationElement:
@@ -171,7 +171,7 @@ def parse_notification_file(notificiation_file: TextIO) -> NotificationElement:
 
 def parse_snapshot_or_delta(
     snapshot_or_delta: TextIO,
-) -> Generator[WithdrawElement | PublishElement, None, None]:
+) -> Generator[Union[WithdrawElement, PublishElement], None, None]:
     huge_parser = etree.XMLParser(encoding="utf-8", recover=False, huge_tree=True)
     doc = etree.parse(snapshot_or_delta, parser=huge_parser)
     validate(doc)
