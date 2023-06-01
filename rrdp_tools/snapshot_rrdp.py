@@ -9,7 +9,7 @@ import urllib.parse
 from pathlib import Path
 
 from lxml import etree
-from rrdp import validate
+from .rrdp import validate
 
 from typing import TextIO, Optional
 
@@ -19,10 +19,10 @@ logging.basicConfig()
 LOG = logging.getLogger(__name__)
 LOG.setLevel(logging.INFO)
 
-def get_and_check(target_file: Path,
-                  uri: str,
-                  sha256: str,
-                  override_host: Optional[str]) -> None:
+
+def get_and_check(
+    target_file: Path, uri: str, sha256: str, override_host: Optional[str]
+) -> None:
     expected_hash = sha256.lower()
 
     if target_file.exists():
@@ -48,22 +48,30 @@ def get_and_check(target_file: Path,
 
     t0 = time.time()
     res = requests.get(uri)
-    print("  * {:>11}b   {:.3f}s   {}".format(len(res.content), time.time()-t0, uri))
+    print("  * {:>11}b   {:.3f}s   {}".format(len(res.content), time.time() - t0, uri))
 
     assert res.status_code == 200
 
     digest = hashlib.sha256(res.content).hexdigest()
 
     if digest != expected_hash:
-        raise ValueError("Hash mismatch for downloaded file. Expected %s actual %s", expected_hash, digest, uri)
+        raise ValueError(
+            "Hash mismatch for downloaded file. Expected %s actual %s",
+            expected_hash,
+            digest,
+            uri,
+        )
 
     with target_file.open("wb") as f:
         f.write(res.content)
 
-def snapshot_rrdp(notification_url: str,
-                  output_path: Path,
-                  override_host: str,
-                  skip_snapshot: bool = False):
+
+def snapshot_rrdp(
+    notification_url: str,
+    output_path: Path,
+    override_host: str,
+    skip_snapshot: bool = False,
+):
     res = requests.get(notification_url)
     if res.status_code != 200:
         print(f"HTTP {res.status_code} from RRDP server, aborting")
@@ -77,45 +85,40 @@ def snapshot_rrdp(notification_url: str,
 
     snapshot = doc.find("{http://www.ripe.net/rpki/rrdp}snapshot")
     if not skip_snapshot:
-        get_and_check(output_path / "snapshot.xml",
-                      snapshot.attrib["uri"],
-                      snapshot.attrib["hash"],
-                      override_host=override_host)
+        get_and_check(
+            output_path / "snapshot.xml",
+            snapshot.attrib["uri"],
+            snapshot.attrib["hash"],
+            override_host=override_host,
+        )
 
     deltas = doc.findall("{http://www.ripe.net/rpki/rrdp}delta")
     for delta in deltas:
-        serial = delta.attrib['serial']
-        get_and_check(output_path / f"{serial}.xml",
-                      delta.attrib['uri'],
-                      delta.attrib['hash'],
-                      override_host=override_host)
+        serial = delta.attrib["serial"]
+        get_and_check(
+            output_path / f"{serial}.xml",
+            delta.attrib["uri"],
+            delta.attrib["hash"],
+            override_host=override_host,
+        )
 
 
 def main():
     parser = argparse.ArgumentParser(
-            description="""Save an RRDP repositories state (snapshot + deltas)"""
+        description="""Save an RRDP repositories state (snapshot + deltas)"""
     )
 
-    parser.add_argument('notification_url',
-                        help='URL to notification.xml',
-                        type=str
-                        )
-    parser.add_argument('output_dir',
-                        help='output directory',
-                        )
-    parser.add_argument('--override_host',
-                        help='[protocol]://hostname to override',
-                        )
-    parser.add_argument('-v',
-                        '--verbose',
-                        help='verbose',
-                        action='store_true'
-                        )
-    parser.add_argument('--skip_snapshot',
-                        help='verbose',
-                        action='store_true'
-                        )
-
+    parser.add_argument("notification_url", help="URL to notification.xml", type=str)
+    parser.add_argument(
+        "output_dir",
+        help="output directory",
+    )
+    parser.add_argument(
+        "--override_host",
+        help="[protocol]://hostname to override",
+    )
+    parser.add_argument("-v", "--verbose", help="verbose", action="store_true")
+    parser.add_argument("--skip_snapshot", help="verbose", action="store_true")
 
     args = parser.parse_args()
     if args.verbose:
@@ -127,10 +130,12 @@ def main():
         parser.print_help()
         sys.exit(2)
 
-    snapshot_rrdp(args.notification_url,
-                  output_dir,
-                  override_host=args.override_host,
-                  skip_snapshot=args.skip_snapshot)
+    snapshot_rrdp(
+        args.notification_url,
+        output_dir,
+        override_host=args.override_host,
+        skip_snapshot=args.skip_snapshot,
+    )
 
 
 if __name__ == "__main__":
