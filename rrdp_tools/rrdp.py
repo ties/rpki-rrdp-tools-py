@@ -8,7 +8,7 @@ import logging
 from lxml import etree
 from lxml.etree import RelaxNG
 from dataclasses import dataclass, InitVar
-from typing import Generator, Optional, TextIO
+from typing import Generator, Optional, TextIO, Union
 
 
 LOG = logging.getLogger(__name__)
@@ -96,7 +96,7 @@ class PublishElement:
     uri: str
     hash: Optional[str]
     content: bytes
-    h_content: str | None = None
+    h_content: Union[str, None] = None
 
     def __post_init__(self) -> None:
         h = hashlib.sha256()
