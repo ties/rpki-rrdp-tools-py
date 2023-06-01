@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import TextIO, Dict, NamedTuple, Set
 
 from lxml import etree
-from rrdp import validate, NS_RRDP, parse_snapshot_or_delta, PublishElement
+from .rrdp import validate, NS_RRDP, parse_snapshot_or_delta, PublishElement
 import requests
 
 

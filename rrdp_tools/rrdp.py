@@ -116,7 +116,57 @@ class WithdrawElement:
         return f"WithdrawElement[uri={self.uri}, hash={self.hash.hex()}"
 
 
+@dataclass
+class SnapshotElement:
+    hash: str
+    uri: str
+
+
+@dataclass
+class DeltaElement:
+    hash: str
+    uri: str
+
+
+@dataclass
+class NotificationElement:
+    snapshot: SnapshotElement
+    deltas: list[DeltaElement]
+    serial: int
+    session_id: str
+
+
 RrdpElement = PublishElement | WithdrawElement
+
+
+def parse_notification_file(notificiation_file: TextIO) -> NotificationElement:
+    doc = etree.fromstring(notificiation_file)
+    validate(doc)
+
+    snapshot_elem = doc.find("{http://www.ripe.net/rpki/rrdp}snapshot")
+    snapshot = SnapshotElement(
+        uri=snapshot_elem.attrib["uri"], hash=snapshot_elem.attrib["hash"]
+    )
+
+    delta_elements = doc.findall("{http://www.ripe.net/rpki/rrdp}delta")
+    deltas = []
+
+    assert doc.tag == "{http://www.ripe.net/rpki/rrdp}notification"
+
+    for delta in delta_elements:
+        deltas.append(
+            DeltaElement(
+                hash=delta.attrib["hash"],
+                uri=delta.attrib["uri"],
+            )
+        )
+
+    return NotificationElement(
+        snapshot=snapshot,
+        deltas=deltas,
+        serial=int(doc.attrib["serial"]),
+        session_id=doc.attrib["session_id"],
+    )
 
 
 def parse_snapshot_or_delta(
