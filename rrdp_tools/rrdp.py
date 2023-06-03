@@ -195,6 +195,11 @@ def parse_snapshot_or_delta(
             pe = PublishElement(uri, hash, content)
 
             if hash and hash.lower() != pe.h_content:
-                LOG.error("Hash mismatch: h(content)=%s attrib=%s", pe.h_content, hash)
+                LOG.error(
+                    "Hash mismatch for %s: h(content)=%s attrib=%s",
+                    uri,
+                    pe.h_content,
+                    hash,
+                )
 
             yield pe
