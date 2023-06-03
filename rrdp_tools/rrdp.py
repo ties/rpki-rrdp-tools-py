@@ -8,7 +8,7 @@ import logging
 from lxml import etree
 from lxml.etree import RelaxNG
 from dataclasses import dataclass, InitVar
-from typing import Generator, Optional, TextIO, Union
+from typing import Generator, Optional, TextIO, Union, Set
 
 
 LOG = logging.getLogger(__name__)
@@ -181,11 +181,19 @@ def parse_snapshot_or_delta(
     assert len(nodes) == 1
     root = nodes[0]
 
+    seen_uris: Set[str] = set()
+
     for elem in root.getchildren():
         uri = elem.attrib["uri"]
         hash = elem.get("hash", None)
 
         content = base64.b64decode(elem.text) if elem.text else b""
+
+        if uri in seen_uris:
+            LOG.error("Duplicate URI in elements: %s, appending hash to filename")
+            uri = f"{uri}-{hash}"
+        else:
+            seen_uris.add(uri)
 
         if elem.tag == "{http://www.ripe.net/rpki/rrdp}withdraw":
             if not hash:
