@@ -13,9 +13,15 @@ from pathlib import Path
 from typing import TextIO, Dict, NamedTuple, Set
 
 from lxml import etree
-from .rrdp import validate, NS_RRDP, parse_snapshot_or_delta, PublishElement
 import requests
 
+from .rrdp import (
+    RrdpElement,
+    validate,
+    NS_RRDP,
+    parse_snapshot_or_delta,
+    PublishElement,
+)
 
 logging.basicConfig()
 LOG = logging.getLogger(__name__)

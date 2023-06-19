@@ -68,7 +68,7 @@ def snapshot_rrdp(
     output_path: Path,
     override_host: str,
     skip_snapshot: bool = False,
-    include_session: bool = False
+    include_session: bool = False,
 ):
     """Snapshot RRDP content."""
 
@@ -130,9 +130,7 @@ def main():
         help="[protocol]://hostname to override",
     )
     parser.add_argument(
-        "--include-session",
-        help="Include session ID in path",
-        action="store_true"
+        "--include-session", help="Include session ID in path", action="store_true"
     )
     parser.add_argument("-v", "--verbose", help="verbose", action="store_true")
     parser.add_argument("--skip_snapshot", help="verbose", action="store_true")
