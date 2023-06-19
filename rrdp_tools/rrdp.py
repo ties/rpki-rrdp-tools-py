@@ -7,6 +7,7 @@ import logging
 
 from lxml import etree
 from lxml.etree import RelaxNG
+
 from dataclasses import dataclass, InitVar
 from typing import Generator, Optional, TextIO, Union, Set
 
@@ -94,17 +95,15 @@ def validate(doc) -> None:
 @dataclass(unsafe_hash=True)
 class PublishElement:
     uri: str
-    hash: Optional[str]
+    previous_hash: Optional[str]
     content: bytes
     h_content: Union[str, None] = None
 
     def __post_init__(self) -> None:
-        h = hashlib.sha256()
-        h.update(self.content)
-        self.h_content = h.hexdigest()
+        self.h_content = hashlib.sha256(self.content).hexdigest()
 
     def __repr__(self) -> str:
-        return f"PublishElement[uri={self.uri}, hash={self.hash.hex() if self.hash else 'N/A'}, sha256(content)={self.h_content}b"
+        return f"PublishElement[uri={self.uri}, previous_hash={self.hash.hex() if self.hash else 'N/A'}, sha256(content)={self.h_content}b"
 
 
 @dataclass(unsafe_hash=True)
@@ -181,19 +180,11 @@ def parse_snapshot_or_delta(
     assert len(nodes) == 1
     root = nodes[0]
 
-    seen_uris: Set[str] = set()
-
     for elem in root.getchildren():
         uri = elem.attrib["uri"]
         hash = elem.get("hash", None)
 
         content = base64.b64decode(elem.text) if elem.text else b""
-
-        if uri in seen_uris:
-            LOG.error("Duplicate URI in elements: %s, appending hash to filename")
-            uri = f"{uri}-{hash}"
-        else:
-            seen_uris.add(uri)
 
         if elem.tag == "{http://www.ripe.net/rpki/rrdp}withdraw":
             if not hash:
@@ -201,13 +192,6 @@ def parse_snapshot_or_delta(
             yield WithdrawElement(uri, hash)
         elif elem.tag == "{http://www.ripe.net/rpki/rrdp}publish":
             pe = PublishElement(uri, hash, content)
-
-            if hash and hash.lower() != pe.h_content:
-                LOG.error(
-                    "Hash mismatch for %s: h(content)=%s attrib=%s",
-                    uri,
-                    pe.h_content,
-                    hash,
-                )
+            # Hash is for replacing an element
 
             yield pe

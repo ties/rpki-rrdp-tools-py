@@ -1,6 +1,5 @@
 import argparse
 import base64
-import hashlib
 import logging
 import sys
 import time

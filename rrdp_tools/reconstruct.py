@@ -54,18 +54,22 @@ def reconstruct_repo(rrdp_file: TextIO, output_path: Path, filter_match: str):
     wrote = 0
 
     for elem in parse_snapshot_or_delta(rrdp_file):
+        effective_uri = elem.uri
+
         if elem.uri in seen_objects:
+            h = hashlib.sha256(elem.content).hexdigest()
             LOG.error(
-                "Repeated entry: %s. previous entries: %s",
+                "Repeated entry: %s (appending hash to filename). previous entries: %s",
                 elem,
                 seen_objects[elem.uri],
             )
+            effective_uri = f"{elem.uri}-{h}"
 
         seen_objects[elem.uri].add(elem)
 
         if isinstance(elem, PublishElement):
             if match(elem.uri):
-                tokens = urllib.parse.urlparse(elem.uri)
+                tokens = urllib.parse.urlparse(effective_uri)
                 file_path = output_path / f"./{tokens.path}"
                 # Ensure that output dir is a subdirectory and create if necessary
                 assert output_path in file_path.parents
