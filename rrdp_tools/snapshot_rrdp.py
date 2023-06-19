@@ -1,5 +1,4 @@
 import argparse
-import base64
 import hashlib
 import logging
 import sys
@@ -7,13 +6,14 @@ import time
 import urllib.parse
 
 from pathlib import Path
-
-from lxml import etree
-from .rrdp import validate
-
 from typing import TextIO, Optional
 
+from lxml import etree
+
 import requests
+
+
+from .rrdp import validate
 
 logging.basicConfig()
 LOG = logging.getLogger(__name__)
@@ -48,7 +48,7 @@ def get_and_check(
 
     t0 = time.time()
     res = requests.get(uri)
-    print("  * {:>11}b   {:.3f}s   {}".format(len(res.content), time.time() - t0, uri))
+    print(f"  * {len(res.content):>11}b   {time.time() - t0:.3f}s   {uri}")
 
     assert res.status_code == 200
 
@@ -56,10 +56,7 @@ def get_and_check(
 
     if digest != expected_hash:
         raise ValueError(
-            "Hash mismatch for downloaded file. Expected %s actual %s",
-            expected_hash,
-            digest,
-            uri,
+            f"Hash mismatch for downloaded file. Expected {expected_hash} actual {digest} at {uri}"
         )
 
     with target_file.open("wb") as f:
@@ -71,7 +68,10 @@ def snapshot_rrdp(
     output_path: Path,
     override_host: str,
     skip_snapshot: bool = False,
+    include_session: bool = False
 ):
+    """Snapshot RRDP content."""
+
     res = requests.get(notification_url)
     if res.status_code != 200:
         print(f"HTTP {res.status_code} from RRDP server, aborting")
@@ -79,6 +79,18 @@ def snapshot_rrdp(
         return
     doc = etree.fromstring(res.text)
     validate(doc)
+
+    if include_session:
+        # If session_id is present in notification tag, add it to path
+        assert doc.tag == "{http://www.ripe.net/rpki/rrdp}notification"
+        session_id = doc.attrib.get("session_id")
+        if session_id:
+            output_path = output_path / session_id
+            output_path.mkdir(parents=True, exist_ok=True)
+        else:
+            print("Error: No session_id in notification file!")
+            sys.exit(1)
+
     # Document is valid,
     with (output_path / "notification.xml").open("w") as f:
         f.write(res.text)
@@ -117,6 +129,11 @@ def main():
         "--override_host",
         help="[protocol]://hostname to override",
     )
+    parser.add_argument(
+        "--include-session",
+        help="Include session ID in path",
+        action="store_true"
+    )
     parser.add_argument("-v", "--verbose", help="verbose", action="store_true")
     parser.add_argument("--skip_snapshot", help="verbose", action="store_true")
 
@@ -135,6 +152,7 @@ def main():
         output_dir,
         override_host=args.override_host,
         skip_snapshot=args.skip_snapshot,
+        include_session=args.include_session,
     )
 
 
