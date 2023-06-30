@@ -73,14 +73,15 @@ async def get_and_check(
 
 
 async def snapshot_rrdp(
-    sem: asyncio.Semaphore,
     notification_url: str,
     output_path: Path,
     override_host: Optional[str] = None,
     skip_snapshot: bool = False,
     include_session: bool = False,
+    threads: int = 8
 ):
     """Snapshot RRDP content."""
+    sem = asyncio.Semaphore(threads)
 
     async with aiohttp.ClientSession() as session:
         LOG.debug("GET %s", notification_url)
@@ -174,12 +175,12 @@ def main(
 
     asyncio.run(
         snapshot_rrdp(
-            asyncio.Semaphore(threads),
             notification_url,
             output_dir,
             override_host=override_host,
             skip_snapshot=skip_snapshot,
             include_session=include_session,
+            threads=threads
         )
     )
 
