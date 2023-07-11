@@ -78,7 +78,8 @@ async def snapshot_rrdp(
     override_host: Optional[str] = None,
     skip_snapshot: bool = False,
     include_session: bool = False,
-    threads: int = 8
+    threads: int = 8,
+    limit_deltas: Optional[int] = None,
 ):
     """Snapshot RRDP content."""
     sem = asyncio.Semaphore(threads)
@@ -124,7 +125,9 @@ async def snapshot_rrdp(
             )
 
         deltas = doc.findall("{http://www.ripe.net/rpki/rrdp}delta")
-        for delta in deltas:
+        for idx, delta in enumerate(deltas):
+            if limit_deltas is not None and idx >= limit_deltas:
+                break
             serial = delta.attrib["serial"]
             queue.append(
                 get_and_check(
@@ -148,6 +151,9 @@ async def snapshot_rrdp(
 @click.option("-v", "--verbose", help="verbose", is_flag=True)
 @click.option("--skip_snapshot", help="Skip download of the RRDP snaphot", is_flag=True)
 @click.option("--threads", help="Number of download threads", type=int, default=8)
+@click.option(
+    "--limit-deltas", help="Number of deltas to include", type=int, default=None
+)
 def main(
     notification_url: str,
     output_dir: Path,
@@ -156,6 +162,7 @@ def main(
     verbose: bool = False,
     skip_snapshot: bool = True,
     threads: int = 4,
+    limit_deltas: Optional[int] = None,
 ):
     """
     Snapshot RRDP content
@@ -180,7 +187,8 @@ def main(
             override_host=override_host,
             skip_snapshot=skip_snapshot,
             include_session=include_session,
-            threads=threads
+            threads=threads,
+            limit_deltas=limit_deltas,
         )
     )
 

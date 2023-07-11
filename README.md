@@ -21,3 +21,9 @@ poetry run python -m rrdp_tools.reconstruct \
   [output_dir] \
   -v
 ```
+
+# Changelog
+
+## v0.2.0:
+
+  * Add `--limit-deltas` to limit the number of deltas to keep
