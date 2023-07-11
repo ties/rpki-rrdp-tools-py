@@ -7,7 +7,10 @@ A number of RRDP utilities in Python.
 poetry run python -m rrdp_tools.snapshot_rrdp \
     https://rrdp.arin.net/notification.xml \
     [output_dir] \
-    --include-session
+    # optional: include session in output path
+    --include-session \
+    # optional
+    --skip_snapshot \
 ```
 
 ## Reconstruct the files present in a delta.xml or snapshot.xml:
