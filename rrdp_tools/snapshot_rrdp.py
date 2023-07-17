@@ -22,6 +22,15 @@ logging.basicConfig()
 LOG = logging.getLogger(__name__)
 LOG.setLevel(logging.INFO)
 
+def set_time_from_headers(res: aiohttp.ClientResponse, target_file: Path) -> None:
+    last_modified = res.headers.get("Last-Modified", None)
+    try:
+        if last_modified:
+            last_modified_date = email.utils.parsedate_to_datetime(last_modified)
+            os.utime(target_file, (last_modified_date.timestamp(), last_modified_date.timestamp()))
+    except Exception as e:
+        LOG.warning("Failed to set mtime on %s: %s", target_file, e)
+
 
 async def get_and_check(
     sem: asyncio.Semaphore,
@@ -73,13 +82,7 @@ async def get_and_check(
 
     with target_file.open("wb") as f:
         f.write(content)
-    # Set the modification time
-    try:
-        if last_modified:
-            last_modified_date = email.utils.parsedate_to_datetime(last_modified)
-            os.utime(target_file, (last_modified_date.timestamp(), last_modified_date.timestamp()))
-    except Exception as e:
-        LOG.warning("Failed to set mtime on %s: %s", target_file, e)
+    set_time_from_headers(res, target_file)
 
 
 async def snapshot_rrdp(
@@ -118,6 +121,7 @@ async def snapshot_rrdp(
         # Document is valid,
         with (output_path / "notification.xml").open("wb") as f:
             f.write(await res.read())
+        set_time_from_headers(res, output_path / "notification.xml")
 
         queue = []
 

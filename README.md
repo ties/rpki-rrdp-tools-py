@@ -24,6 +24,9 @@ poetry run python -m rrdp_tools.reconstruct \
 
 # Changelog
 
+## v0.2.x:
+  * Set timestamp of downloaded files from `last-modified` header.
+
 ## v0.2.0:
 
   * Add `--limit-deltas` to limit the number of deltas to keep
