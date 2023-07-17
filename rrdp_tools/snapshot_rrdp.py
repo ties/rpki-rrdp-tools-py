@@ -1,7 +1,8 @@
 import asyncio
-import argparse
+import email.utils
 import hashlib
 import logging
+import os
 import sys
 import time
 import urllib.parse
@@ -68,8 +69,17 @@ async def get_and_check(
                 f"Hash mismatch for downloaded file. Expected {expected_hash} actual {digest} at {uri}"
             )
 
+    last_modified = res.headers.get("Last-Modified", None)
+
     with target_file.open("wb") as f:
         f.write(content)
+    # Set the modification time
+    try:
+        if last_modified:
+            last_modified_date = email.utils.parsedate_to_datetime(last_modified)
+            os.utime(target_file, (last_modified_date.timestamp(), last_modified_date.timestamp()))
+    except Exception as e:
+        LOG.warning("Failed to set mtime on %s: %s", target_file, e)
 
 
 async def snapshot_rrdp(
