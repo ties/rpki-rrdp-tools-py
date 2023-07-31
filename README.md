@@ -19,13 +19,17 @@ poetry run python -m rrdp_tools.snapshot_rrdp \
 poetry run python -m rrdp_tools.reconstruct \
   [path-to]/snapshot.xml \
   [output_dir] \
+  # optional: If file only needs to be semantically validated
+  --reconstruct-only \
   -v
 ```
 
 # Changelog
 
-## v0.2.x:
+## v0.2.1:
   * Set timestamp of downloaded files from `last-modified` header.
+  * Process withdraws when reconstructing
+  * Validate hashes when reconstructing
 
 ## v0.2.0:
 
