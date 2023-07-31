@@ -181,17 +181,17 @@ def parse_snapshot_or_delta(
     root = nodes[0]
 
     for elem in root.getchildren():
-        uri = elem.attrib["uri"]
-        hash = elem.get("hash", None)
+        elem_uri = elem.attrib["uri"]
+        elem_hash = elem.get("hash", None)
 
-        content = base64.b64decode(elem.text) if elem.text else b""
+        elem_content = base64.b64decode(elem.text) if elem.text else b""
 
         if elem.tag == "{http://www.ripe.net/rpki/rrdp}withdraw":
-            if not hash:
-                LOG.error("withdraw uri=%s without hash provided.", uri)
-            yield WithdrawElement(uri, hash)
+            if not elem_hash:
+                LOG.error("withdraw uri=%s without hash provided.", elem_uri)
+            yield WithdrawElement(elem_uri, elem_hash)
         elif elem.tag == "{http://www.ripe.net/rpki/rrdp}publish":
-            pe = PublishElement(uri, hash, content)
-            # Hash is for replacing an element
+            pe = PublishElement(elem_uri, elem_hash, elem_content)
+            # If the hash is present it is for replacing an element: can not compare it to content.
 
             yield pe

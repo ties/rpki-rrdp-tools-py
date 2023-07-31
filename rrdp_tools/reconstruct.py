@@ -17,6 +17,7 @@ import requests
 
 from .rrdp import (
     RrdpElement,
+    WithdrawElement,
     validate,
     NS_RRDP,
     parse_snapshot_or_delta,
@@ -48,7 +49,7 @@ def http_get_delta_or_snapshot(uri: str) -> TextIO:
     return io.StringIO(req.text)
 
 
-def reconstruct_repo(rrdp_file: TextIO, output_path: Path, filter_match: str):
+def reconstruct_repo(rrdp_file: TextIO, output_path: Path, filter_match: str, verify_only: bool = False):
     def match(uri) -> bool:
         """Match against the regex in `filter_match` (default: accept)."""
         if filter_match:
@@ -57,7 +58,7 @@ def reconstruct_repo(rrdp_file: TextIO, output_path: Path, filter_match: str):
         return True
 
     seen_objects: Dict[str, RrdpElement] = defaultdict(set)
-    wrote = 0
+    publishes, withdraws = 0,0
 
     for elem in parse_snapshot_or_delta(rrdp_file):
         effective_uri = elem.uri
@@ -79,18 +80,46 @@ def reconstruct_repo(rrdp_file: TextIO, output_path: Path, filter_match: str):
                 file_path = output_path / f"./{tokens.path}"
                 # Ensure that output dir is a subdirectory and create if necessary
                 assert output_path in file_path.parents
-                file_path.parent.mkdir(parents=True, exist_ok=True)
 
-                with open(file_path, "wb") as f:
-                    # Accept empty publish tags/empty files
-                    f.write(elem.content)
+                # publish with hash -> overwrite, check old hash
+                if elem.previous_hash:
+                    if file_path.exists():
+                        h_disk = hashlib.sha256(file_path.read_bytes()).hexdigest()
+                        if h_disk != elem.previous_hash:
+                            LOG.error("Hash mismatch for %s: %s (disk) %s (publish)", elem.uri, h_disk, elem.previous_hash)
+                    else:
+                        LOG.debug("File %s sha256=%s in publish tag w/ hash not present on disk", elem.uri, elem.previous_hash)
 
-                LOG.debug("Wrote '%s' to '%s'", elem.uri, file_path)
-                wrote += 1
+
+                if not verify_only:
+                    file_path.parent.mkdir(parents=True, exist_ok=True)
+
+                    with open(file_path, "wb") as f:
+                        # Accept empty publish tags/empty files
+                        f.write(elem.content)
+
+                    LOG.debug("Wrote '%s' to '%s'", elem.uri, file_path)
+                publishes += 1
             else:
                 LOG.debug("skipped '%s': did not match filter.", elem.uri)
+        elif isinstance(elem, WithdrawElement):
+            if match(elem.uri):
+                file_path = output_path / f"./{urllib.parse.urlparse(effective_uri).path}"
+                if file_path.exists():
+                    h_disk = hashlib.sha256(file_path.read_bytes()).hexdigest()
 
-    LOG.info("Wrote %i files to %s", wrote, output_path)
+                    if h_disk != elem.hash:
+                        LOG.error("Hash mismatch for %s: %s (disk) %s (withdraw)", elem.uri, h_disk, elem.hash)
+
+                    if not verify_only:
+                        file_path.unlink()
+                        LOG.debug("Removed '%s'", file_path)
+                else:
+                    LOG.error("withdraw %s %s: file not found.", elem.uri, elem.hash)
+            withdraws += 1
+
+
+    LOG.info("Processed %i (%i published, %i withdrawn) files to %s", publishes+withdraws, publishes, withdraws, output_path)
 
 
 def main():
@@ -113,6 +142,11 @@ def main():
         "output_dir",
         help="output directory",
     )
+    parser.add_argument(
+        "--verify-only",
+        help="verify mode: do not write any files",
+        action="store_true"
+    )
     parser.add_argument("-v", "--verbose", help="verbose", action="store_true")
 
     args = parser.parse_args()
@@ -133,7 +167,7 @@ def main():
     else:
         infile = args.infile
 
-    reconstruct_repo(infile, output_dir, args.filename_pattern)
+    reconstruct_repo(infile, output_dir, args.filename_pattern, verify_only=args.verify_only)
 
 
 if __name__ == "__main__":
