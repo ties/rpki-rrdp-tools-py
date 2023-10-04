@@ -10,7 +10,8 @@ import urllib.parse
 from collections import defaultdict
 from enum import Enum
 from pathlib import Path
-from typing import TextIO, Dict, NamedTuple, Set
+from typing import Optional, TextIO, Dict, NamedTuple, Set
+import click
 
 from lxml import etree
 import requests
@@ -122,52 +123,66 @@ def reconstruct_repo(rrdp_file: TextIO, output_path: Path, filter_match: str, ve
     LOG.info("Processed %i (%i published, %i withdrawn) files to %s", publishes+withdraws, publishes, withdraws, output_path)
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="""Reconstruct repo state from snapshot xml."""
-    )
+def do_exit():
+    """Exit and print help."""
+    ctx = click.get_current_context()
+    click.echo(ctx.get_help())
+    ctx.exit(2)
 
-    parser.add_argument(
-        "infile",
-        help="Name of the file containing the snapshot or delta",
-        type=str,
-    )
-    parser.add_argument(
-        "--filename_pattern",
-        help="optional regular expression to filter filenames against",
-        type=str,
-        default="",
-    )
-    parser.add_argument(
-        "output_dir",
-        help="output directory",
-    )
-    parser.add_argument(
-        "--verify-only",
-        help="verify mode: do not write any files",
-        action="store_true"
-    )
-    parser.add_argument("-v", "--verbose", help="verbose", action="store_true")
-
-    args = parser.parse_args()
-    output_dir = Path(args.output_dir).resolve()
-
-    if args.verbose:
+@click.command("Reconstruct repo state from snapshot/delta XML.")
+@click.argument("infile", type=str)
+@click.argument("output_dir", type=click.Path(path_type=Path))
+@click.option("--create-target", help="Create target directory", is_flag=True)
+@click.option("--filename-pattern", help="optional regular expression to filter filenames against", type=str, default="")
+@click.option("--verify-only", help="verify mode: do not write any files", is_flag=True)
+@click.option("-v", "--verbose", help="verbose", is_flag=True)
+def main(
+        infile: str,
+        output_dir: Path,
+        create_target: bool,
+        filename_pattern: Optional[str],
+        verify_only: bool = False,
+        verbose: bool = False
+        ):
+    """Call the main reconstruct function with the correct arguments."""
+    if verbose:
         logging.getLogger().setLevel(logging.DEBUG)
     else:
         logging.getLogger().setLevel(logging.INFO)
 
+    output_dir = output_dir.resolve()
+
+
     if not output_dir.is_dir():
-        LOG.error("Output directory %s does not exist", args.output_dir)
-        parser.print_help()
-        sys.exit(2)
+        if output_dir.exists():
+            click.echo(click.style("Output directory already exists and is not a directory", fg="red", bold=True))
+            do_exit()
 
-    if re.match("^http(s)?://", args.infile):
-        infile = http_get_delta_or_snapshot(args.infile)
+        if create_target:
+            if output_dir.parent.is_dir():
+                click.echo(click.style(f"Creating output directory {output_dir}", fg="green"))
+                output_dir.mkdir(parents=True)
+            else:
+                click.echo(click.style(f"Parent of output directory ({output_dir}) does not exist - and not creating recursively", fg="red", bold=True))
+                do_exit()
+        else:
+            click.echo(click.style(f"Output directory {output_dir} does not exist", fg="red", bold=True))
+            do_exit()
+
+    
+
+    if re.match("^http(s)?://", infile):
+        infile_io = http_get_delta_or_snapshot(infile)
     else:
-        infile = args.infile
+        p = Path(infile)
+        if not p.is_file():
+            click.echo(click.style(f"Input file {infile} does not exist", fg="red", bold=True))
+            do_exit()
 
-    reconstruct_repo(infile, output_dir, args.filename_pattern, verify_only=args.verify_only)
+        infile_io = p.open("r", encoding="utf-8")
+        
+
+    reconstruct_repo(infile_io, output_dir, filename_pattern, verify_only=verify_only)
 
 
 if __name__ == "__main__":

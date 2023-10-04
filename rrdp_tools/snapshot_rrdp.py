@@ -188,7 +188,7 @@ def main(
     """
     if verbose:
         LOG.setLevel(logging.DEBUG)
-    output_dir = Path(output_dir).resolve()
+    output_dir = output_dir.resolve()
 
     if not output_dir.is_dir():
         do_exit = False
