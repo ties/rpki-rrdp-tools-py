@@ -22,12 +22,16 @@ logging.basicConfig()
 LOG = logging.getLogger(__name__)
 LOG.setLevel(logging.INFO)
 
+
 def set_time_from_headers(res: aiohttp.ClientResponse, target_file: Path) -> None:
     last_modified = res.headers.get("Last-Modified", None)
     try:
         if last_modified:
             last_modified_date = email.utils.parsedate_to_datetime(last_modified)
-            os.utime(target_file, (last_modified_date.timestamp(), last_modified_date.timestamp()))
+            os.utime(
+                target_file,
+                (last_modified_date.timestamp(), last_modified_date.timestamp()),
+            )
     except Exception as e:
         LOG.warning("Failed to set mtime on %s: %s", target_file, e)
 
@@ -178,7 +182,7 @@ def main(
     skip_snapshot: bool = True,
     threads: int = 4,
     limit_deltas: Optional[int] = None,
-    create_target: bool = False
+    create_target: bool = False,
 ):
     """
     Snapshot RRDP content
@@ -195,13 +199,25 @@ def main(
 
         if create_target:
             if output_dir.parent.is_dir():
-                click.echo(click.style(f"Creating output directory {output_dir}", fg="green"))
+                click.echo(
+                    click.style(f"Creating output directory {output_dir}", fg="green")
+                )
                 output_dir.mkdir(parents=True)
             else:
-                click.echo(click.style(f"Parent of output directory ({output_dir}) does not exist - and not creating recursively", fg="red", bold=True))
+                click.echo(
+                    click.style(
+                        f"Parent of output directory ({output_dir}) does not exist - and not creating recursively",
+                        fg="red",
+                        bold=True,
+                    )
+                )
                 do_exit = True
         else:
-            click.echo(click.style(f"Output directory {output_dir} does not exist", fg="red", bold=True))
+            click.echo(
+                click.style(
+                    f"Output directory {output_dir} does not exist", fg="red", bold=True
+                )
+            )
             do_exit = True
 
         if do_exit:
