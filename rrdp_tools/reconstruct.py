@@ -158,7 +158,7 @@ def main():
         logging.getLogger().setLevel(logging.INFO)
 
     if not output_dir.is_dir():
-        LOG.error("Output directory {} does not exist", args.output_dir)
+        LOG.error("Output directory %s does not exist", args.output_dir)
         parser.print_help()
         sys.exit(2)
 

@@ -162,6 +162,7 @@ async def snapshot_rrdp(
 @click.argument("output_dir", type=click.Path(path_type=Path))
 @click.option("--override_host", help="[protocol]://hostname to override", type=str)
 @click.option("--include-session", help="Include session ID in path", is_flag=True)
+@click.option("--create-target", help="Create target dir", is_flag=True)
 @click.option("-v", "--verbose", help="verbose", is_flag=True)
 @click.option("--skip_snapshot", help="Skip download of the RRDP snaphot", is_flag=True)
 @click.option("--threads", help="Number of download threads", type=int, default=8)
@@ -177,6 +178,7 @@ def main(
     skip_snapshot: bool = True,
     threads: int = 4,
     limit_deltas: Optional[int] = None,
+    create_target: bool = False
 ):
     """
     Snapshot RRDP content
@@ -189,10 +191,23 @@ def main(
     output_dir = Path(output_dir).resolve()
 
     if not output_dir.is_dir():
-        LOG.error("Output directory %s does not exist", output_dir)
-        ctx = click.get_current_context()
-        click.echo(ctx.get_help())
-        ctx.exit(2)
+        do_exit = False
+
+        if create_target:
+            if output_dir.parent.is_dir():
+                click.echo(click.style(f"Creating output directory {output_dir}", fg="green"))
+                output_dir.mkdir(parents=True)
+            else:
+                click.echo(click.style(f"Parent of output directory ({output_dir}) does not exist - and not creating recursively", fg="red", bold=True))
+                do_exit = True
+        else:
+            click.echo(click.style(f"Output directory {output_dir} does not exist", fg="red", bold=True))
+            do_exit = True
+
+        if do_exit:
+            ctx = click.get_current_context()
+            click.echo(ctx.get_help())
+            ctx.exit(2)
 
     asyncio.run(
         snapshot_rrdp(
