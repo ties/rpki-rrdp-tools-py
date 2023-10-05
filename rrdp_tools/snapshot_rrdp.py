@@ -6,15 +6,12 @@ import os
 import sys
 import time
 import urllib.parse
-
 from pathlib import Path
-from typing import TextIO, Optional
+from typing import Optional, TextIO
 
 import aiohttp
 import click
-
 from lxml import etree
-
 
 from .rrdp import validate
 

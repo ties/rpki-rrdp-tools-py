@@ -3,22 +3,21 @@ import io
 import logging
 import re
 import urllib.parse
-
 from collections import defaultdict
 from pathlib import Path
-from typing import Optional, TextIO, Dict
+from typing import Dict, List, Optional, TextIO
 
 import click
 import requests
 from lxml import etree
 
 from .rrdp import (
+    NS_RRDP,
+    PublishElement,
     RrdpElement,
     WithdrawElement,
-    validate,
-    NS_RRDP,
     parse_snapshot_or_delta,
-    PublishElement,
+    validate,
 )
 
 logging.basicConfig()
@@ -156,7 +155,7 @@ def do_exit():
     "--filename-pattern",
     help="optional regular expression to filter filenames against",
     type=str,
-    default="",
+    multiple=True,
 )
 @click.option("--verify-only", help="verify mode: do not write any files", is_flag=True)
 @click.option("-v", "--verbose", help="verbose", is_flag=True)
@@ -164,7 +163,7 @@ def main(
     infile: str,
     output_dir: Path,
     create_target: bool,
-    filename_pattern: Optional[str],
+    filename_pattern: List[str],
     verify_only: bool = False,
     verbose: bool = False,
 ):
@@ -179,11 +178,9 @@ def main(
     if not output_dir.is_dir():
         if output_dir.exists():
             click.echo(
-                click.style(
-                    "Output directory already exists and is not a directory",
-                    fg="red",
-                    bold=True,
-                )
+                click.style("Output ", fg="red")
+                + click.style(f"file ({output_dir})", fg="red", bold=True)
+                + click.style(" already exists and is not a directory", fg="red")
             )
             do_exit()
 
