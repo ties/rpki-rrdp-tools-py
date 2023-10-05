@@ -46,14 +46,24 @@ def http_get_delta_or_snapshot(uri: str) -> TextIO:
 
 
 def reconstruct_repo(
-    rrdp_file: TextIO, output_path: Path, filter_match: str, verify_only: bool = False
+    rrdp_file: TextIO,
+    output_path: Path,
+    filter_match: List[str],
+    verify_only: bool = False,
 ):
+    """Actually reconstruct the repository."""
+    compiled_patterns = [re.compile(pattern) for pattern in filter_match]
+
     def match(uri) -> bool:
         """Match against the regex in `filter_match` (default: accept)."""
-        if filter_match:
-            filename_pattern = re.compile(filter_match)
-            return filename_pattern.search(uri)
-        return True
+        if not compiled_patterns:
+            return True
+
+        for pattern in compiled_patterns:
+            if pattern.search(uri):
+                return True
+
+        return False
 
     seen_objects: Dict[str, RrdpElement] = defaultdict(set)
     publishes, withdraws = 0, 0

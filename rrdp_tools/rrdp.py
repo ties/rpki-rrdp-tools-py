@@ -15,7 +15,8 @@ LOG = logging.getLogger(__name__)
 NS_RRDP = "http://www.ripe.net/rpki/rrdp"
 
 SCHEMA = RelaxNG.from_rnc_string(
-    """#
+    """
+#
 # RELAX NG schema for the RPKI Repository Delta Protocol (RRDP).
 #
 
@@ -101,7 +102,7 @@ class PublishElement:
         self.h_content = hashlib.sha256(self.content).hexdigest()
 
     def __repr__(self) -> str:
-        return f"PublishElement[uri={self.uri}, previous_hash={self.hash.hex() if self.hash else 'N/A'}, sha256(content)={self.h_content}b"
+        return f"PublishElement[uri={self.uri}, previous_hash={self.previous_hash.hex() if self.previous_hash else 'N/A'}, sha256(content)={self.h_content}b"
 
 
 @dataclass(unsafe_hash=True)
@@ -110,7 +111,7 @@ class WithdrawElement:
     hash: str
 
     def __repr__(self) -> str:
-        return f"WithdrawElement[uri={self.uri}, hash={self.hash.hex()}"
+        return f"WithdrawElement[uri={self.uri}, hash={self.hash}"
 
 
 @dataclass
