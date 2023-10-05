@@ -1,16 +1,11 @@
 import argparse
-import base64
 import logging
 import sys
 import time
-import urllib.parse
 from pathlib import Path
-from typing import TextIO
 
 import requests
-from lxml import etree
 
-from .rrdp import validate
 
 logging.basicConfig()
 

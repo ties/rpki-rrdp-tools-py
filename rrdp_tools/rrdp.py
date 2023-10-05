@@ -4,8 +4,8 @@ https://tools.ietf.org/html/rfc8182
 import base64
 import hashlib
 import logging
-from dataclasses import InitVar, dataclass
-from typing import Generator, Optional, Set, TextIO, Union
+from dataclasses import dataclass
+from typing import Generator, Optional, TextIO, Union
 
 from lxml import etree
 from lxml.etree import RelaxNG

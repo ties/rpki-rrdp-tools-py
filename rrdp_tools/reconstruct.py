@@ -5,7 +5,7 @@ import re
 import urllib.parse
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, List, Optional, TextIO
+from typing import Dict, List, TextIO
 
 import click
 import requests
@@ -17,7 +17,6 @@ from .rrdp import (
     RrdpElement,
     WithdrawElement,
     parse_snapshot_or_delta,
-    validate,
 )
 
 logging.basicConfig()

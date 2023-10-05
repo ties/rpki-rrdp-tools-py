@@ -7,7 +7,7 @@ import sys
 import time
 import urllib.parse
 from pathlib import Path
-from typing import Optional, TextIO
+from typing import Optional
 
 import aiohttp
 import click
@@ -79,7 +79,7 @@ async def get_and_check(
                 f"Hash mismatch for downloaded file. Expected {expected_hash} actual {digest} at {uri}"
             )
 
-    last_modified = res.headers.get("Last-Modified", None)
+    res.headers.get("Last-Modified", None)
 
     with target_file.open("wb") as f:
         f.write(content)
