@@ -1,4 +1,3 @@
-recursive-include misc *.sh
 
 exclude MANIFEST.in
 exclude poetry.lock
@@ -10,8 +9,9 @@ exclude Dockerfile
 global-exclude .gitkeep .gitignore .DS_Store
 
 prune tests
-prunt .github
-prunt .vscode
+prune .github
+prune .vscode
+prune misc
 
 exclude requirements.txt
 prune workbooks
