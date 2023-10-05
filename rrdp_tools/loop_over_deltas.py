@@ -6,7 +6,6 @@ from pathlib import Path
 
 import requests
 
-
 logging.basicConfig()
 
 LOG = logging.getLogger(Path(__file__).name)

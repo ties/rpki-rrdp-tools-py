@@ -25,7 +25,7 @@ default namespace = "http://www.ripe.net/rpki/rrdp"
 version = xsd:positiveInteger   { maxInclusive="1" }
 serial  = xsd:positiveInteger
 uri     = xsd:anyURI
-uuid    = xsd:string            { pattern = "[\-0-9a-fA-F]+" }
+uuid    = xsd:string            { pattern = "[\\-0-9a-fA-F]+" }
 hash    = xsd:string            { pattern = "[0-9a-fA-F]+" }
 base64  = xsd:base64Binary
 
