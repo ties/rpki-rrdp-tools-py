@@ -1,14 +1,17 @@
 import hashlib
 import io
 import logging
+import os
 import re
 import urllib.parse
 from collections import defaultdict
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, TextIO
 
 import click
 import requests
+from asn1crypto import cms, crl, x509
 from lxml import etree
 
 from .rrdp import (
@@ -21,6 +24,29 @@ from .rrdp import (
 
 logging.basicConfig()
 LOG = logging.getLogger(__name__)
+
+
+def parse_file_time(file_name: str, content: bytes) -> datetime:
+    extension = file_name.split(".")[-1]
+
+    match extension:
+        case "crl":
+            parsed_crl = crl.CertificateList.load(content)
+            return parsed_crl["tbs_cert_list"]["this_update"].native
+        case "cer":
+            cert = x509.Certificate.load(content)
+
+            return cert.not_valid_before
+        case "mft" | "roa" | "asa" | "gbr" | "sig":
+            info = cms.ContentInfo.load(content)
+            signed_data = info["content"]
+            signer = signed_data["signer_infos"][0]
+
+            for attr in signer["signed_attrs"]:
+                if attr["type"].native == "signing_time":
+                    return attr["values"][0].native
+    # Fallback to current time
+    return datetime.now()
 
 
 def http_get_delta_or_snapshot(uri: str) -> TextIO:
@@ -49,6 +75,7 @@ def reconstruct_repo(
     output_path: Path,
     filter_match: List[str],
     verify_only: bool = False,
+    parse_for_time: bool = False,
 ):
     """Actually reconstruct the repository."""
     compiled_patterns = [re.compile(pattern) for pattern in filter_match]
@@ -81,64 +108,20 @@ def reconstruct_repo(
 
         seen_objects[elem.uri].add(elem)
 
-        if isinstance(elem, PublishElement):
-            if match(elem.uri):
-                tokens = urllib.parse.urlparse(effective_uri)
-                file_path = output_path / f"./{tokens.path}"
-                # Ensure that output dir is a subdirectory and create if necessary
-                assert output_path in file_path.parents
-
-                # publish with hash -> overwrite, check old hash
-                if elem.previous_hash:
-                    if file_path.exists():
-                        h_disk = hashlib.sha256(file_path.read_bytes()).hexdigest()
-                        if h_disk != elem.previous_hash:
-                            LOG.error(
-                                "Hash mismatch for %s: %s (disk) %s (publish)",
-                                elem.uri,
-                                h_disk,
-                                elem.previous_hash,
-                            )
-                    else:
-                        LOG.debug(
-                            "File %s sha256=%s in publish tag w/ hash not present on disk",
-                            elem.uri,
-                            elem.previous_hash,
-                        )
-
-                if not verify_only:
-                    file_path.parent.mkdir(parents=True, exist_ok=True)
-
-                    with open(file_path, "wb") as f:
-                        # Accept empty publish tags/empty files
-                        f.write(elem.content)
-
-                    LOG.debug("Wrote '%s' to '%s'", elem.uri, file_path)
-                publishes += 1
-            else:
-                LOG.debug("skipped '%s': did not match filter.", elem.uri)
-        elif isinstance(elem, WithdrawElement):
-            if match(elem.uri):
-                file_path = (
-                    output_path / f"./{urllib.parse.urlparse(effective_uri).path}"
-                )
-                if file_path.exists():
-                    h_disk = hashlib.sha256(file_path.read_bytes()).hexdigest()
-
-                    if h_disk != elem.hash:
-                        LOG.error(
-                            "Hash mismatch for %s: %s (disk) %s (withdraw)",
-                            elem.uri,
-                            h_disk,
-                            elem.hash,
-                        )
-
-                    if not verify_only:
-                        file_path.unlink()
-                        LOG.debug("Removed '%s'", file_path)
-                else:
-                    LOG.error("withdraw %s %s: file not found.", elem.uri, elem.hash)
-            withdraws += 1
+        if match(elem.uri):
+            match elem:
+                case PublishElement():
+                    handle_publish_element(
+                        output_path, verify_only, parse_for_time, elem, effective_uri
+                    )
+                    publishes += 1
+                case WithdrawElement():
+                    handle_withdraw_element(
+                        output_path, verify_only, elem, effective_uri
+                    )
+                    withdraws += 1
+        else:
+            LOG.debug("skipped '%s': did not match filter.", elem.uri)
 
     LOG.info(
         "Processed %i (%i published, %i withdrawn) files to %s",
@@ -147,6 +130,73 @@ def reconstruct_repo(
         withdraws,
         output_path,
     )
+
+
+def handle_withdraw_element(output_path, verify_only, elem, effective_uri):
+    file_path = output_path / f"./{urllib.parse.urlparse(effective_uri).path}"
+    if file_path.exists():
+        h_disk = hashlib.sha256(file_path.read_bytes()).hexdigest()
+
+        if h_disk != elem.hash:
+            LOG.error(
+                "Hash mismatch for %s: %s (disk) %s (withdraw)",
+                elem.uri,
+                h_disk,
+                elem.hash,
+            )
+
+        if not verify_only:
+            file_path.unlink()
+            LOG.debug("Removed '%s'", file_path)
+    else:
+        LOG.error("withdraw %s %s: file not found.", elem.uri, elem.hash)
+
+
+def handle_publish_element(
+    output_path, verify_only, parse_for_time, elem, effective_uri
+):
+    tokens = urllib.parse.urlparse(effective_uri)
+    file_path = output_path / f"./{tokens.path}"
+    # Ensure that output dir is a subdirectory and create if necessary
+    assert output_path in file_path.parents
+
+    # publish with hash -> overwrite, check old hash
+    if elem.previous_hash:
+        if file_path.exists():
+            h_disk = hashlib.sha256(file_path.read_bytes()).hexdigest()
+            if h_disk != elem.previous_hash:
+                LOG.error(
+                    "Hash mismatch for %s: %s (disk) %s (publish)",
+                    elem.uri,
+                    h_disk,
+                    elem.previous_hash,
+                )
+        else:
+            LOG.debug(
+                "File %s sha256=%s in publish tag w/ hash not present on disk",
+                elem.uri,
+                elem.previous_hash,
+            )
+
+    if not verify_only:
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+
+        with open(file_path, "wb") as f:
+            # Accept empty publish tags/empty files
+            f.write(elem.content)
+
+        LOG.debug("Wrote '%s' to '%s'", elem.uri, file_path)
+
+        # Update modification time
+        if parse_for_time:
+            file_date = parse_file_time(file_path.name, elem.content)
+            os.utime(
+                file_path,
+                (
+                    datetime.timestamp(file_date),
+                    datetime.timestamp(file_date),
+                ),
+            )
 
 
 def do_exit():
@@ -168,6 +218,12 @@ def do_exit():
 )
 @click.option("--verify-only", help="verify mode: do not write any files", is_flag=True)
 @click.option("-v", "--verbose", help="verbose", is_flag=True)
+@click.option(
+    "--parse-for-time/--no-parse-for-time",
+    help="Parse files for notBefore/signing time",
+    is_flag=True,
+    default=True,
+)
 def main(
     infile: str,
     output_dir: Path,
@@ -175,6 +231,7 @@ def main(
     filename_pattern: List[str],
     verify_only: bool = False,
     verbose: bool = False,
+    parse_for_time: bool = False,
 ):
     """Call the main reconstruct function with the correct arguments."""
     if verbose:
@@ -228,7 +285,13 @@ def main(
 
         infile_io = p.open("r", encoding="utf-8")
 
-    reconstruct_repo(infile_io, output_dir, filename_pattern, verify_only=verify_only)
+    reconstruct_repo(
+        infile_io,
+        output_dir,
+        filename_pattern,
+        verify_only=verify_only,
+        parse_for_time=parse_for_time,
+    )
 
 
 if __name__ == "__main__":
