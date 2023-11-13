@@ -79,8 +79,6 @@ async def get_and_check(
                 f"Hash mismatch for downloaded file. Expected {expected_hash} actual {digest} at {uri}"
             )
 
-    res.headers.get("Last-Modified", None)
-
     with target_file.open("wb") as f:
         f.write(content)
     set_time_from_headers(res, target_file)
@@ -94,6 +92,7 @@ async def snapshot_rrdp(
     include_session: bool = False,
     threads: int = 8,
     limit_deltas: Optional[int] = None,
+    include_hash: bool = False,
 ):
     """Snapshot RRDP content."""
     sem = asyncio.Semaphore(threads)
@@ -108,16 +107,17 @@ async def snapshot_rrdp(
         doc = etree.fromstring(await res.text())
         validate(doc)
 
+        assert doc.tag == "{http://www.ripe.net/rpki/rrdp}notification"
+        session_id = doc.attrib["session_id"]
+        serial = doc.attrib["serial"]
+
+        if not session_id:
+            print("No session_id in notification file!")
+            sys.exit(1)
+
         if include_session:
-            # If session_id is present in notification tag, add it to path
-            assert doc.tag == "{http://www.ripe.net/rpki/rrdp}notification"
-            session_id = doc.attrib.get("session_id")
-            if session_id:
-                output_path = output_path / session_id
-                output_path.mkdir(parents=True, exist_ok=True)
-            else:
-                print("Error: No session_id in notification file!")
-                sys.exit(1)
+            output_path = output_path / session_id
+            output_path.mkdir(parents=True, exist_ok=True)
 
         # Document is valid,
         with (output_path / "notification.xml").open("wb") as f:
@@ -128,13 +128,19 @@ async def snapshot_rrdp(
 
         snapshot = doc.find("{http://www.ripe.net/rpki/rrdp}snapshot")
         if not skip_snapshot:
+            snapshot_hash = snapshot.attrib["hash"]
+            file_name = (
+                "snapshot-{serial}-{hash}.xml"
+                if include_hash
+                else f"snapshot-{serial}.xml"
+            )
             queue.append(
                 get_and_check(
                     sem,
                     session,
-                    output_path / "snapshot.xml",
+                    output_path / file_name,
                     snapshot.attrib["uri"],
-                    snapshot.attrib["hash"],
+                    snapshot_hash,
                     override_host=override_host,
                 )
             )
@@ -143,14 +149,18 @@ async def snapshot_rrdp(
         for idx, delta in enumerate(deltas):
             if limit_deltas is not None and idx >= limit_deltas:
                 break
-            serial = delta.attrib["serial"]
+            serial = (delta.attrib["serial"],)
+            delta_hash = (delta.attrib["hash"],)
+            file_name = (
+                f"{serial}-{delta_hash}.xml" if include_hash else f"{serial}.xml"
+            )
             queue.append(
                 get_and_check(
                     sem,
                     session,
-                    output_path / f"{serial}.xml",
+                    output_path / file_name,
                     delta.attrib["uri"],
-                    delta.attrib["hash"],
+                    delta_hash,
                     override_host=override_host,
                 )
             )
@@ -166,6 +176,9 @@ async def snapshot_rrdp(
 @click.option("--create-target", help="Create target dir", is_flag=True)
 @click.option("-v", "--verbose", help="verbose", is_flag=True)
 @click.option("--skip_snapshot", help="Skip download of the RRDP snaphot", is_flag=True)
+@click.option(
+    "--include-hash/--no-include-hash", help="Include hash in filenames", is_flag=True
+)
 @click.option("--threads", help="Number of download threads", type=int, default=8)
 @click.option(
     "--limit-deltas", help="Number of deltas to include", type=int, default=None
@@ -180,6 +193,7 @@ def main(
     threads: int = 4,
     limit_deltas: Optional[int] = None,
     create_target: bool = False,
+    include_hash: bool = True,
 ):
     """
     Snapshot RRDP content
@@ -231,6 +245,7 @@ def main(
             include_session=include_session,
             threads=threads,
             limit_deltas=limit_deltas,
+            include_hash=include_hash,
         )
     )
 
