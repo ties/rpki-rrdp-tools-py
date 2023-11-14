@@ -149,8 +149,8 @@ async def snapshot_rrdp(
         for idx, delta in enumerate(deltas):
             if limit_deltas is not None and idx >= limit_deltas:
                 break
-            serial = (delta.attrib["serial"],)
-            delta_hash = (delta.attrib["hash"],)
+            serial = delta.attrib["serial"]
+            delta_hash = delta.attrib["hash"]
             file_name = (
                 f"{serial}-{delta_hash}.xml" if include_hash else f"{serial}.xml"
             )
