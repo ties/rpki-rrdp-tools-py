@@ -36,21 +36,39 @@ def set_time_from_headers(res: aiohttp.ClientResponse, target_file: Path) -> Non
 async def get_and_check(
     sem: asyncio.Semaphore,
     session: aiohttp.ClientSession,
-    target_file: Path,
+    base_file_name: Path,
     uri: str,
     sha256: str,
     override_host: Optional[str],
+    hash_in_name: bool = False,
 ) -> None:
+    """
+    Get a file if needed and check the hash compared to the download.
+
+    If a file exists and the hash should be added to the name, do so.
+    """
     expected_hash = sha256.lower()
 
-    if target_file.exists():
-        with target_file.open("rb") as f:
-            cur_hash = hashlib.sha256(f.read()).hexdigest()
-            if cur_hash == expected_hash:
-                LOG.debug("Already have %s as %s", uri, target_file)
-                return
-            else:
-                LOG.info("Hash for %s does not match, downloading %s", target_file, uri)
+    target_file = base_file_name
+    if hash_in_name:
+        target_file = (
+            base_file_name.parent
+            / f"{base_file_name.stem}-{expected_hash}.{base_file_name.suffix}"
+        )
+        if target_file.exists():
+            LOG.debug("Already have %s as %s", uri, target_file)
+            return
+    else:
+        if target_file.exists():
+            with target_file.open("rb") as f:
+                cur_hash = hashlib.sha256(f.read()).hexdigest()
+                if cur_hash == expected_hash:
+                    LOG.debug("Already have %s as %s", uri, target_file)
+                    return
+                else:
+                    LOG.info(
+                        "Hash for %s does not match, downloading %s", target_file, uri
+                    )
 
     async with sem:
         if override_host:
@@ -129,11 +147,7 @@ async def snapshot_rrdp(
         snapshot = doc.find("{http://www.ripe.net/rpki/rrdp}snapshot")
         if not skip_snapshot:
             snapshot_hash = snapshot.attrib["hash"]
-            file_name = (
-                "snapshot-{serial}-{hash}.xml"
-                if include_hash
-                else f"snapshot-{serial}.xml"
-            )
+            file_name = f"snapshot-{serial}.xml"
             queue.append(
                 get_and_check(
                     sem,
@@ -142,6 +156,7 @@ async def snapshot_rrdp(
                     snapshot.attrib["uri"],
                     snapshot_hash,
                     override_host=override_host,
+                    hash_in_name=include_hash,
                 )
             )
 
@@ -151,9 +166,7 @@ async def snapshot_rrdp(
                 break
             serial = delta.attrib["serial"]
             delta_hash = delta.attrib["hash"]
-            file_name = (
-                f"{serial}-{delta_hash}.xml" if include_hash else f"{serial}.xml"
-            )
+            file_name = f"{serial}.xml"
             queue.append(
                 get_and_check(
                     sem,
@@ -162,6 +175,7 @@ async def snapshot_rrdp(
                     delta.attrib["uri"],
                     delta_hash,
                     override_host=override_host,
+                    hash_in_name=include_hash,
                 )
             )
 

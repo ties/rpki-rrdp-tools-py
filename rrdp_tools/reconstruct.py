@@ -11,14 +11,14 @@ from typing import Dict, List, TextIO
 
 import click
 import requests
-from asn1crypto import cms, crl, x509
-from lxml import etree
+
+from rrdp_tools.rpki import parse_file_time
 
 from .rrdp import (
-    NS_RRDP,
     PublishElement,
     RrdpElement,
     WithdrawElement,
+    parse_notification_file,
     parse_snapshot_or_delta,
 )
 
@@ -26,45 +26,22 @@ logging.basicConfig()
 LOG = logging.getLogger(__name__)
 
 
-def parse_file_time(file_name: str, content: bytes) -> datetime:
-    extension = file_name.split(".")[-1]
-
-    match extension:
-        case "crl":
-            parsed_crl = crl.CertificateList.load(content)
-            return parsed_crl["tbs_cert_list"]["this_update"].native
-        case "cer":
-            cert = x509.Certificate.load(content)
-
-            return cert.not_valid_before
-        case "mft" | "roa" | "asa" | "gbr" | "sig":
-            info = cms.ContentInfo.load(content)
-            signed_data = info["content"]
-            signer = signed_data["signer_infos"][0]
-
-            for attr in signer["signed_attrs"]:
-                if attr["type"].native == "signing_time":
-                    return attr["values"][0].native
-    # Fallback to current time
-    return datetime.now()
-
-
 def http_get_delta_or_snapshot(uri: str) -> TextIO:
     LOG.info("Downloading from %s", uri)
     req = requests.get(uri)
     assert req.status_code == 200
 
-    huge_parser = etree.XMLParser(encoding="utf-8", recover=False, huge_tree=True)
-    doc = etree.fromstring(req.text, parser=huge_parser)
+    notification = parse_notification_file(io.StringIO(req.text))
+    uri = notification.snapshot.uri
 
-    if doc.tag == "{http://www.ripe.net/rpki/rrdp}notification":
-        # Get the snapshot
-        elem = doc.find("rrdp:snapshot", namespaces={"rrdp": NS_RRDP})
-        uri = elem.attrib["uri"]
-        LOG.info("found notification.xml with snapshot at %s", uri)
+    LOG.info(
+        "found notification.xml for serial %d with snapshot at %s",
+        notification.serial,
+        uri,
+    )
 
-        req = requests.get(uri)
-        assert req.status_code == 200
+    req = requests.get(uri)
+    assert req.status_code == 200
 
     LOG.info("%s has a size of %ib", uri, len(req.text))
     return io.StringIO(req.text)
@@ -132,7 +109,9 @@ def reconstruct_repo(
     )
 
 
-def handle_withdraw_element(output_path, verify_only, elem, effective_uri):
+def handle_withdraw_element(
+    output_path, verify_only, elem: WithdrawElement, effective_uri
+):
     file_path = output_path / f"./{urllib.parse.urlparse(effective_uri).path}"
     if file_path.exists():
         h_disk = hashlib.sha256(file_path.read_bytes()).hexdigest()
@@ -153,7 +132,7 @@ def handle_withdraw_element(output_path, verify_only, elem, effective_uri):
 
 
 def handle_publish_element(
-    output_path, verify_only, parse_for_time, elem, effective_uri
+    output_path, verify_only, parse_for_time, elem: PublishElement, effective_uri
 ):
     tokens = urllib.parse.urlparse(effective_uri)
     file_path = output_path / f"./{tokens.path}"

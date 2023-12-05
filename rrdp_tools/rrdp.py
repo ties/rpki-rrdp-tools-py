@@ -138,7 +138,8 @@ RrdpElement = Union[PublishElement, WithdrawElement]
 
 
 def parse_notification_file(notificiation_file: TextIO) -> NotificationElement:
-    doc = etree.fromstring(notificiation_file)
+    huge_parser = etree.XMLParser(encoding="utf-8", recover=False, huge_tree=True)
+    doc = etree.fromstring(notificiation_file, parser=huge_parser)
     validate(doc)
 
     snapshot_elem = doc.find("{http://www.ripe.net/rpki/rrdp}snapshot")
@@ -147,17 +148,13 @@ def parse_notification_file(notificiation_file: TextIO) -> NotificationElement:
     )
 
     delta_elements = doc.findall("{http://www.ripe.net/rpki/rrdp}delta")
-    deltas = []
 
     assert doc.tag == "{http://www.ripe.net/rpki/rrdp}notification"
 
-    for delta in delta_elements:
-        deltas.append(
-            DeltaElement(
-                hash=delta.attrib["hash"],
-                uri=delta.attrib["uri"],
-            )
-        )
+    deltas = [
+        DeltaElement(hash=delta.attrib["hash"], uri=delta.attrib["uri"])
+        for delta in delta_elements
+    ]
 
     return NotificationElement(
         snapshot=snapshot,
