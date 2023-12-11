@@ -86,7 +86,7 @@ async def get_and_check(
         t0 = time.time()
         res = await session.get(uri)
         if res.status != 200:
-            LOG.error("HTTP %d for %s", res.status_code, uri)
+            LOG.error("HTTP %d for %s", res.status, uri)
         content = await res.read()
         print(f"  * {len(content):>11}b   {time.time() - t0:.3f}s   {uri}")
 
