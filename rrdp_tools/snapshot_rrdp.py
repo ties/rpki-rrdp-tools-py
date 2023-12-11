@@ -41,7 +41,7 @@ async def get_and_check(
     sha256: str,
     override_host: Optional[str],
     hash_in_name: bool = False,
-) -> None:
+) -> bool:
     """
     Get a file if needed and check the hash compared to the download.
 
@@ -57,14 +57,14 @@ async def get_and_check(
         )
         if target_file.exists():
             LOG.debug("Already have %s as %s", uri, target_file)
-            return
+            return False
     else:
         if target_file.exists():
             with target_file.open("rb") as f:
                 cur_hash = hashlib.sha256(f.read()).hexdigest()
                 if cur_hash == expected_hash:
                     LOG.debug("Already have %s as %s", uri, target_file)
-                    return
+                    return False
                 else:
                     LOG.info(
                         "Hash for %s does not match, downloading %s", target_file, uri
@@ -86,20 +86,23 @@ async def get_and_check(
         t0 = time.time()
         res = await session.get(uri)
         if res.status != 200:
-            LOG.error("HTTP %d for %s", res.status, uri)
+            reason = await res.read()
+            LOG.error("HTTP %d for %s: %s", res.status, uri, reason)
+            raise ValueError(f"HTTP {res.status} for {uri}")
         content = await res.read()
-        print(f"  * {len(content):>11}b   {time.time() - t0:.3f}s   {uri}")
+        LOG.debug("%s %.2f %db", uri, time.time() - t0, len(content))
 
         digest = hashlib.sha256(content).hexdigest()
 
         if digest != expected_hash:
             raise ValueError(
-                f"Hash mismatch for downloaded file. Expected {expected_hash} actual {digest} at {uri}"
+                f"Hash mismatch for {uri}. Expected {expected_hash} actual {digest}"
             )
 
     with target_file.open("wb") as f:
         f.write(content)
     set_time_from_headers(res, target_file)
+    return True
 
 
 async def snapshot_rrdp(
@@ -119,8 +122,8 @@ async def snapshot_rrdp(
         LOG.debug("GET %s", notification_url)
         res = await session.get(notification_url)
         if res.status != 200:
-            print(f"HTTP {res.status} from RRDP server, aborting")
-            print(f"reason: {await res.text()}")
+            click.echo(f"HTTP {res.status} from RRDP server, aborting")
+            click.echo(f"reason: {await res.text()}")
             return
         doc = etree.fromstring(await res.text())
         validate(doc)
@@ -128,6 +131,8 @@ async def snapshot_rrdp(
         assert doc.tag == "{http://www.ripe.net/rpki/rrdp}notification"
         session_id = doc.attrib["session_id"]
         serial = doc.attrib["serial"]
+
+        LOG.info("%s serial=%s session_id=%s", notification_url, serial, session_id)
 
         if not session_id:
             print("No session_id in notification file!")
@@ -179,13 +184,16 @@ async def snapshot_rrdp(
                 )
             )
 
-        await asyncio.gather(*queue)
+        status_per_file = await asyncio.gather(*queue)
+        click.echo(
+            f"Update completed. {len(queue)} files are present. Downloaded {sum(status_per_file)} files."
+        )
 
 
 @click.command("snapshot_rrd")
 @click.argument("notification_url", type=str)
 @click.argument("output_dir", type=click.Path(path_type=Path))
-@click.option("--override_host", help="[protocol]://hostname to override", type=str)
+@click.option("--override-host", help="[protocol]://hostname to override", type=str)
 @click.option("--include-session", help="Include session ID in path", is_flag=True)
 @click.option("--create-target", help="Create target dir", is_flag=True)
 @click.option("-v", "--verbose", help="verbose", is_flag=True)
