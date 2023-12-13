@@ -53,7 +53,7 @@ async def get_and_check(
     if hash_in_name:
         target_file = (
             base_file_name.parent
-            / f"{base_file_name.stem}-{expected_hash}.{base_file_name.suffix}"
+            / f"{base_file_name.stem}-{expected_hash}{base_file_name.suffix}"
         )
         if target_file.exists():
             LOG.debug("Already have %s as %s", uri, target_file)
