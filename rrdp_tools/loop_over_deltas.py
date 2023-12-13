@@ -1,10 +1,15 @@
 import argparse
+
 import logging
+import multiprocessing
 import sys
 import time
+import asyncio
+from dataclasses import dataclass
 from pathlib import Path
 
-import requests
+import aiohttp
+import click
 
 logging.basicConfig()
 
@@ -12,62 +17,76 @@ LOG = logging.getLogger(Path(__file__).name)
 LOG.setLevel(logging.INFO)
 
 
-def get_and_check(target_file: Path, uri: str) -> None:
-    if not target_file.exists():
-        LOG.debug("Getting %s target_file=%s", uri, target_file)
+@dataclass
+class Download:
+    target_file: Path
+    uri: str
 
-        t0 = time.time()
-        res = requests.get(uri)
-        LOG.info("%d %s in %fs", res.status_code, uri, time.time() - t0)
+async def get_and_check(i: int, session: aiohttp.ClientSession, download: Download) -> None:
+    t0 = time.time()
+    async with session.get(download.uri) as response:
+        LOG.debug("[%d] HTTP %d %.3fs", i, response.status, time.time() - t0)
+        if response.status == 200:
+            with open(download.target_file, "wb") as f:
+                f.write(await response.read())
+            LOG.info("[%d] Downloaded %s to %s in %.3fs", i, download.uri, download.target_file, time.time() - t0)
+        else:
+            raise ValueError(f"Got status {response.status} for {download.uri}")
 
-        if res.status_code != 200:
-            raise ValueError("HTTP %d for %s", res.status_code, uri)
+async def worker(i: int, session: aiohttp.ClientSession, queue: asyncio.Queue[Download]) -> int:
+    processed = 0
+    while not queue.empty():
+        download = await queue.get()
+        processed += 1
+        try:
+            await get_and_check(i, session, download)
+        except Exception as e:
+            LOG.error(e)
+        finally:
+            queue.task_done()
 
-        with target_file.open("wb") as f:
-            f.write(res.content)
+    return processed
 
 
-def attempt_delta_download(
+async def attempt_delta_download(
     url_template: str, base_path: Path, min_delta: int, max_delta: int
 ) -> None:
+    queue = asyncio.Queue()
+    
     for delta_number in range(min_delta, max_delta):
-        try:
-            get_and_check(
-                base_path / f"{delta_number}.xml", url_template.format(delta_number)
-            )
-        except ValueError as e:
-            LOG.error(e)
+        await queue.put(Download(base_path / f"{delta_number}.xml", url_template.format(delta_number)))
 
+    async with aiohttp.ClientSession() as session:
+            workers = [worker(i, session, queue) for i in range(multiprocessing.cpu_count())]
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="""Loop over all the static guesses for the delta URL"""
-    )
+            statuses = await asyncio.gather(*workers)
+            await queue.join()
 
-    parser.add_argument(
-        "url_template",
-        help="URL to template the delta number into, {} will be replaced with delta number (e.g. https://rrdp.ripe.net/66221b75-cf14-4693-99e4-96ce9717c874/{}/delta.xml)",
-        type=str,
-    )
-    parser.add_argument("start", help="Minimum number to template", type=int)
-    parser.add_argument("end", help="Final number to template", type=int)
-    parser.add_argument(
-        "output_dir",
-        help="output directory",
-    )
-    parser.add_argument("-v", "--verbose", help="verbose", action="store_true")
+            for status in statuses:
+                LOG.info("Processed %d downloads", status)
 
-    args = parser.parse_args()
-    if args.verbose:
+@click.command()
+@click.argument("url_template", type=str)
+@click.argument("start", type=int)
+@click.argument("end", type=int)
+@click.argument("output_dir", type=click.Path(exists=True, file_okay=False, dir_okay=True, writable=True, path_type=Path))
+@click.option("--verbose", help="verbose", count=True)
+def main(url_template: str, start: int, end: int, output_dir: Path, verbose: bool):
+    """Loop over all the static guesses for the delta URL
+
+    URL_TEMPLATE: URL to template the delta number into, {} will be replaced with delta number (e.g. https://rrdp.ripe.net/66221b75-cf14-4693-99e4-96ce9717c874/{}/delta.xml)
+    START: Minimum number to template
+    END: Final number to template
+    OUTPUT_DIR: Directory to write files to
+    """
+    if verbose:
         LOG.setLevel(logging.DEBUG)
-    output_dir = Path(args.output_dir).resolve()
 
     if not output_dir.is_dir():
-        LOG.error("Output directory {} does not exist", args.output_dir)
-        parser.print_help()
+        LOG.error("Output directory {} does not exist", output_dir)
         sys.exit(2)
 
-    attempt_delta_download(args.url_template, output_dir, args.start, args.end)
+    asyncio.run(attempt_delta_download(url_template, output_dir, start, end))
 
 
 if __name__ == "__main__":
