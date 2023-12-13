@@ -2,6 +2,7 @@ import asyncio
 import email.utils
 import hashlib
 import logging
+import multiprocessing
 import os
 import sys
 import time
@@ -212,7 +213,7 @@ def main(
     include_session: bool = False,
     verbose: bool = False,
     skip_snapshot: bool = True,
-    threads: int = 4,
+    threads: int = multiprocessing.cpu_count(),
     limit_deltas: Optional[int] = None,
     create_target: bool = False,
     include_hash: bool = True,
