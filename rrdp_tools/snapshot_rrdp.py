@@ -112,7 +112,7 @@ async def snapshot_rrdp(
     override_host: Optional[str] = None,
     skip_snapshot: bool = False,
     include_session: bool = False,
-    threads: int = 8,
+    threads: int = len(os.sched_getaffinity(0)), # use all available cores by default
     limit_deltas: Optional[int] = None,
     include_hash: bool = False,
 ):
