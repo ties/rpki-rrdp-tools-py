@@ -2,3 +2,5 @@
 __pycache__
 dist
 .autoenv.zsh
+asn1/
+.DS_Store
