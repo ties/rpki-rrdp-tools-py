@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import io
 import logging
@@ -9,8 +10,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, TextIO
 
+import aiohttp
 import click
-import requests
 
 from rrdp_tools.rpki import parse_file_time
 
@@ -26,25 +27,28 @@ logging.basicConfig()
 LOG = logging.getLogger(__name__)
 
 
-def http_get_delta_or_snapshot(uri: str) -> TextIO:
+async def http_get_delta_or_snapshot(uri: str) -> TextIO:
     LOG.info("Downloading from %s", uri)
-    req = requests.get(uri)
-    assert req.status_code == 200
+    async with aiohttp.ClientSession() as session:
+        response = await session.get(uri)
+        assert response.status == 200
 
-    notification = parse_notification_file(io.StringIO(req.text))
-    uri = notification.snapshot.uri
+        notification = parse_notification_file(await response.text())
+        uri = notification.snapshot.uri
 
-    LOG.info(
-        "found notification.xml for serial %d with snapshot at %s",
-        notification.serial,
-        uri,
-    )
+        LOG.info(
+            "found notification.xml for serial %d with snapshot at %s",
+            notification.serial,
+            uri,
+        )
 
-    req = requests.get(uri)
-    assert req.status_code == 200
+        response = await session.get(uri)
+        assert response.status == 200
 
-    LOG.info("%s has a size of %ib", uri, len(req.text))
-    return io.StringIO(req.text)
+        text = await response.text()
+
+        LOG.info("%s has a size of %ib", uri, len(text))
+        return io.StringIO(text)
 
 
 def reconstruct_repo(
@@ -253,7 +257,7 @@ def main(
             do_exit()
 
     if re.match("^http(s)?://", infile):
-        infile_io = http_get_delta_or_snapshot(infile)
+        infile_io = asyncio.run(http_get_delta_or_snapshot(infile))
     else:
         p = Path(infile)
         if not p.is_file():
