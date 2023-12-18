@@ -1,0 +1,42 @@
+RPKIManifest { iso(1) member-body(2) us(840) rsadsi(113549)
+    pkcs(1) pkcs9(9) smime(16) mod(0) 60 }
+
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+
+-- EXPORTS ALL --
+
+IMPORTS
+
+CONTENT-TYPE
+FROM CryptographicMessageSyntax-2010 -- in RFC 6268
+{ iso(1) member-body(2) us(840) rsadsi(113549) pkcs(1)
+pkcs-9(9) smime(16) modules(0) id-mod-cms-2009(58) } ;
+
+-- Manifest Content Type
+
+ct-rpkiManifest CONTENT-TYPE ::=
+{ TYPE Manifest IDENTIFIED BY id-ct-rpkiManifest }
+
+id-smime OBJECT IDENTIFIER ::= { iso(1) member-body(2)
+us(840) rsadsi(113549) pkcs(1) pkcs9(9) 16 }
+
+id-ct OBJECT IDENTIFIER ::= { id-smime 1 }
+
+id-ct-rpkiManifest OBJECT IDENTIFIER ::= { id-ct 26 }
+
+Manifest ::= SEQUENCE {
+version        [0] INTEGER DEFAULT 0,
+manifestNumber     INTEGER (0..MAX),
+thisUpdate         GeneralizedTime,
+nextUpdate         GeneralizedTime,
+fileHashAlg        OBJECT IDENTIFIER,
+fileList           SEQUENCE SIZE (0..MAX) OF FileAndHash
+}
+
+FileAndHash ::= SEQUENCE {
+file  IA5String,
+hash  BIT STRING
+}
+
+END

@@ -2,7 +2,6 @@ import asyncio
 import email.utils
 import hashlib
 import logging
-import multiprocessing
 import os
 import sys
 import time
@@ -202,7 +201,9 @@ async def snapshot_rrdp(
 @click.option(
     "--include-hash/--no-include-hash", help="Include hash in filenames", is_flag=True
 )
-@click.option("--threads", help="Number of download threads", type=int, default=os.cpu_count())
+@click.option(
+    "--threads", help="Number of download threads", type=int, default=os.cpu_count()
+)
 @click.option(
     "--limit-deltas", help="Number of deltas to include", type=int, default=None
 )

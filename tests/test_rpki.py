@@ -4,7 +4,7 @@ import pathlib
 
 import pytest
 
-from rrdp_tools.rpki import parse_file_time
+from rrdp_tools.rpki import parse_file_time, parse_manifest
 
 LOG = logging.getLogger(__name__)
 
@@ -31,3 +31,16 @@ def test_parse_file_time(
         with (sample_files / file).open("rb") as f:
             parsed_time = parse_file_time(file, f.read())
             assert parsed_time < yesterday
+
+
+def test_parse_manifest():
+    sample_files = pathlib.Path(__file__).parent / "data/"
+    for file in ("ripe-ncc-ta.mft",):
+        with (sample_files / file).open("rb") as f:
+            mft = parse_manifest(f.read())
+            assert mft.ee_certificate is not None
+            assert mft.signing_time >= mft.ee_certificate.not_valid_before
+            assert mft.manifest_number > 0
+            for entry in mft.file_list:
+                assert entry.file_name is not None
+                assert entry.hash is not None
