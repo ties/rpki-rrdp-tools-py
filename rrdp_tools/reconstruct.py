@@ -75,7 +75,9 @@ def reconstruct_repo(
     seen_objects: Dict[str, RrdpElement] = defaultdict(set)
     publishes, withdraws = 0, 0
 
-    for elem in parse_snapshot_or_delta(rrdp_file):
+    doc = parse_snapshot_or_delta(rrdp_file)
+    LOG.info("processing serial %d for session %s", doc.serial, doc.session_id)
+    for elem in doc.content:
         effective_uri = elem.uri
 
         if elem.uri in seen_objects:

@@ -5,7 +5,7 @@ import base64
 import hashlib
 import logging
 from dataclasses import dataclass
-from typing import Generator, Optional, TextIO, Union
+from typing import Generator, List, Optional, TextIO, Union
 
 from lxml import etree
 from lxml.etree import RelaxNG
@@ -87,6 +87,10 @@ delta_element |= element withdraw {
 )
 
 
+class UnexpectedDocumentException(Exception):
+    pass
+
+
 def validate(doc) -> None:
     SCHEMA.assert_(doc)
 
@@ -102,7 +106,7 @@ class PublishElement:
         self.h_content = hashlib.sha256(self.content).hexdigest()
 
     def __repr__(self) -> str:
-        return f"PublishElement[uri={self.uri}, previous_hash={self.previous_hash.hex() if self.previous_hash else 'N/A'}, sha256(content)={self.h_content}b"
+        return f"PublishElement[uri={self.uri}, previous_hash={self.previous_hash if self.previous_hash else 'N/A'}, sha256(content)={self.h_content}b"
 
 
 @dataclass(unsafe_hash=True)
@@ -118,6 +122,20 @@ class WithdrawElement:
 class SnapshotElement:
     hash: str
     uri: str
+
+
+@dataclass
+class DeltaDocument:
+    serial: int
+    session_id: str
+    content: List[PublishElement | WithdrawElement]
+
+
+@dataclass
+class SnapshotDocument:
+    serial: int
+    session_id: str
+    content: List[PublishElement]
 
 
 @dataclass
@@ -166,16 +184,36 @@ def parse_notification_file(notificiation_file: TextIO) -> NotificationElement:
 
 def parse_snapshot_or_delta(
     snapshot_or_delta: TextIO,
-) -> Generator[Union[WithdrawElement, PublishElement], None, None]:
+) -> DeltaDocument | SnapshotDocument:
     huge_parser = etree.XMLParser(encoding="utf-8", recover=False, huge_tree=True)
     doc = etree.parse(snapshot_or_delta, parser=huge_parser)
     validate(doc)
     # Document is valid
 
     nodes = doc.xpath("/rrdp:snapshot | /rrdp:delta", namespaces={"rrdp": NS_RRDP})
-    assert len(nodes) == 1
+    if len(nodes) != 1:
+        raise UnexpectedDocumentException(
+            "document does not have <snapshot> or <delta> root tags"
+        )
     root = nodes[0]
+    serial = root.attrib["serial"]
+    session_id = root.attrib["session_id"]
 
+    if root.tag == "{http://www.ripe.net/rpki/rrdp}snapshot":
+        return SnapshotDocument(
+            serial=int(serial),
+            session_id=session_id,
+            content=list(parse_publish_withdraw(root)),
+        )
+    elif root.tag == "{http://www.ripe.net/rpki/rrdp}delta":
+        return DeltaDocument(
+            serial=int(serial),
+            session_id=session_id,
+            content=list(parse_publish_withdraw(root)),
+        )
+
+
+def parse_publish_withdraw(root: etree.Element) -> Generator[RrdpElement, None, None]:
     for elem in root.getchildren():
         elem_uri = elem.attrib["uri"]
         elem_hash = elem.get("hash", None)
