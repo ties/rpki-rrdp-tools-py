@@ -31,7 +31,7 @@ manifestNumber     INTEGER (0..MAX),
 thisUpdate         GeneralizedTime,
 nextUpdate         GeneralizedTime,
 fileHashAlg        OBJECT IDENTIFIER,
-fileList           SEQUENCE SIZE (0..MAX) OF FileAndHash
+fileList           SEQUENCE SIZE (1..MAX) OF FileAndHash
 }
 
 FileAndHash ::= SEQUENCE {

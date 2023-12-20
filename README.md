@@ -66,6 +66,7 @@ INFO:__main__:Skipping /Users/kockt/Desktop/tmp/notification.xml: not a snapshot
 ## main:
 
   * Add RRDP content filtering/dumping sub-command
+  * Incorporate [erratum](https://www.rfc-editor.org/errata/eid7118) into rfc9286 asn1 (reported by @job).
 
 ## v0.2.1:
   * Set timestamp of downloaded files from `last-modified` header.
