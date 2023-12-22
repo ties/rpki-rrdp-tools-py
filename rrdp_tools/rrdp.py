@@ -91,8 +91,15 @@ class UnexpectedDocumentException(Exception):
     pass
 
 
+class ValidationException(Exception):
+    pass
+
+
 def validate(doc) -> None:
-    SCHEMA.assert_(doc)
+    try:
+        SCHEMA.assert_(doc)
+    except AssertionError as e:
+        raise ValidationException(e)
 
 
 @dataclass(unsafe_hash=True)
