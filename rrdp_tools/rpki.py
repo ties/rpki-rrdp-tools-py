@@ -2,7 +2,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import List
+from typing import FrozenSet
 
 import asn1tools
 from asn1crypto import cms, crl, x509
@@ -14,10 +14,13 @@ assert asn1_src.exists()
 RFC_9286_ASN1 = asn1tools.compile_files(str(asn1_src), cache_dir="asn1")
 
 
-@dataclass
+@dataclass(frozen=True, order=True)
 class FileAndHash:
     file_name: str
     hash: bytes
+
+    def __str__(self) -> str:
+        return f"{self.file_name:} sha256={self.hash.hex()}"
 
 
 @dataclass
@@ -25,7 +28,7 @@ class ManifestInfo:
     manifest_number: int
     signing_time: datetime
     ee_certificate: x509.Certificate
-    file_list: List[FileAndHash]
+    file_list: FrozenSet[FileAndHash]
 
 
 def parse_manifest(content: bytes) -> ManifestInfo:
@@ -48,10 +51,10 @@ def parse_manifest(content: bytes) -> ManifestInfo:
         manifest_number=mft["manifestNumber"],
         signing_time=signing_time,
         ee_certificate=signed_data["certificates"][0].chosen,
-        file_list=[
-            FileAndHash(file_name=entry["file"], hash=entry["hash"][0])
+        file_list=frozenset(
+            FileAndHash(file_name=entry["file"], hash=bytes(entry["hash"][0]))
             for entry in mft["fileList"]
-        ],
+        ),
     )
 
 
