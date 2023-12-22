@@ -15,6 +15,7 @@ from rrdp_tools.rpki import FileAndHash, parse_file_time, parse_manifest
 from rrdp_tools.rrdp import (
     PublishElement,
     UnexpectedDocumentException,
+    ValidationException,
     parse_snapshot_or_delta,
 )
 
@@ -84,6 +85,8 @@ def process_file(
                                     modification_time=time,
                                     **dataclasses.asdict(elem),
                                 )
+        except ValidationException:
+            LOG.error("%s is not a valid RRDP document", xml_file)
         except UnexpectedDocumentException:
             LOG.info("Skipping %s: not a snapshot or delta document", xml_file)
 
