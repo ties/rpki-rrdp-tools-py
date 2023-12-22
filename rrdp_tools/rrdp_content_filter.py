@@ -6,7 +6,7 @@ import logging
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Generator, List, Optional, Union
+from typing import Dict, FrozenSet, Generator, Optional, Union
 
 import asn1crypto
 import click
@@ -35,7 +35,7 @@ class ManifestMatch:
     manifest_number: int
     signing_time: datetime
     ee_certificate: asn1crypto.x509.Certificate
-    file_list: List[FileAndHash]
+    file_list: FrozenSet[FileAndHash]
 
     previous_hash: Optional[str]
     h_content: Union[str, None] = None
@@ -91,7 +91,9 @@ def process_file(
             LOG.info("Skipping %s: not a snapshot or delta document", xml_file)
 
 
-async def async_main(path: Path, file_match: re.Pattern, log_content: bool):
+async def async_main(
+    path: Path, file_match: re.Pattern, log_content: bool, print_manifest_diff: bool
+):
     files = list(path.glob("**/*.xml"))
     LOG.info("found %d files", len(files))
 
@@ -101,12 +103,30 @@ async def async_main(path: Path, file_match: re.Pattern, log_content: bool):
         LOG.debug("processing %s", xml_file)
         matches.extend(list(process_file(xml_file, file_match, log_content)))
 
+    # map uri -> previous manifest
+    previous_manifest: Dict[str, ManifestMatch] = {}
+
     for entry in sorted(matches, key=lambda x: x.serial):
         match entry:
             case ManifestMatch():
                 click.echo(
                     f"{entry.serial:>6} {entry.uri} {entry.h_content} {entry.manifest_number:>4} {entry.signing_time:%Y-%m-%d %H:%M:%S}"
                 )
+                previous = previous_manifest.get(entry.uri, None)
+                previous_manifest[entry.uri] = entry
+
+                if print_manifest_diff and previous:
+                    added = entry.file_list - previous.file_list
+                    removed = previous.file_list - entry.file_list
+
+                    diff = list(added | removed)
+                    diff.sort()
+
+                    for file in diff:
+                        if file in removed:
+                            click.echo(click.style(f"      - {file}", fg="red"))
+                        else:
+                            click.echo(click.style(f"      + {file}", fg="green"))
             case PublishMatch():
                 click.echo(
                     f"{entry.serial:>6} {entry.uri} {entry.h_content} {entry.modification_time:%Y-%m-%d %H:%M:%S}"
@@ -124,13 +144,21 @@ async def async_main(path: Path, file_match: re.Pattern, log_content: bool):
 @click.option("--file-match", type=str, default=".*\\.mft")
 @click.option("--verbose", "-v", is_flag=True)
 @click.option("--log-content", "-l", is_flag=True)
-def main(path: Path, file_match: str, verbose: bool, log_content: bool):
+@click.option(
+    "--manifest-diff",
+    "-m",
+    is_flag=True,
+    help="Log the difference in FileAndHash set between the manifests",
+)
+def main(
+    path: Path, file_match: str, verbose: bool, log_content: bool, manifest_diff: bool
+):
     if verbose:
         logging.basicConfig(level=logging.DEBUG)
     else:
         logging.basicConfig(level=logging.INFO)
 
-    asyncio.run(async_main(path, re.compile(file_match), log_content))
+    asyncio.run(async_main(path, re.compile(file_match), log_content, manifest_diff))
 
 
 if __name__ == "__main__":
