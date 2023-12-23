@@ -190,7 +190,7 @@ async def snapshot_rrdp(
         )
 
 
-@click.command()
+@click.command("snapshot-rrdp")
 @click.argument("notification_url", type=str)
 @click.argument("output_dir", type=click.Path(path_type=Path))
 @click.option("--override-host", help="[protocol]://hostname to override", type=str)
@@ -207,7 +207,7 @@ async def snapshot_rrdp(
 @click.option(
     "--limit-deltas", help="Number of deltas to include", type=int, default=None
 )
-def snapshot_rrdp(
+def snapshot_rrdp_command(
     notification_url: str,
     output_dir: Path,
     override_host: Optional[str] = None,
@@ -275,4 +275,4 @@ def snapshot_rrdp(
 
 
 if __name__ == "__main__":
-    snapshot_rrdp()
+    snapshot_rrdp_command()

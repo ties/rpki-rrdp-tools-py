@@ -191,7 +191,7 @@ def do_exit():
     ctx.exit(2)
 
 
-@click.command()
+@click.command("reconstruct-repo")
 @click.argument("infile", type=str)
 @click.argument("output_dir", type=click.Path(path_type=Path))
 @click.option("--create-target", help="Create target directory", is_flag=True)
@@ -209,7 +209,7 @@ def do_exit():
     is_flag=True,
     default=True,
 )
-def reconstruct_repo(
+def reconstruct_repo_command(
     infile: str,
     output_dir: Path,
     create_target: bool,
@@ -280,4 +280,4 @@ def reconstruct_repo(
 
 
 if __name__ == "__main__":
-    reconstruct_repo()
+    reconstruct_repo_command()
