@@ -4,19 +4,18 @@ A number of RRDP utilities in Python.
 
 ## Download the full state of a RRDP repository:
 ```
-poetry run python -m rrdp_tools.snapshot_rrdp \
+poetry run python -m rrdp_tools.cli snapshot-rrdp \
     https://rrdp.arin.net/notification.xml \
     [output_dir] \
-    # optional: include session in output path
-    --include-session \
-    # optional
-    --skip_snapshot \
+    --include-session \ # optional: include session in output path
+    --skip_snapshot     # optional: do not download the snapshot file
+    --create-target     # optional: create target dir
 ```
 
 ## Reconstruct the files present in a delta.xml or snapshot.xml:
 
 ```
-poetry run python -m rrdp_tools.reconstruct \
+poetry run python -m rrdp_tools.cli reconstruct-repo \
   [path-to]/snapshot.xml \
   [output_dir] \
   # optional: If file only needs to be semantically validated
@@ -28,9 +27,9 @@ poetry run python -m rrdp_tools.reconstruct \
 
 This supports both manifests and certificates
 ```
-$ poetry run python -m rrdp_tools.rrdp_content_filter ~/Desktop/tmp  --file-match ".*KpSo3.*\.mft"
+$ poetry run python -m rrdp_tools.cli filter-rrdp-content ~/Desktop/tmp  --file-match ".*KpSo3.*\.mft"
 INFO:__main__:found 156 files
-INFO:__main__:Skipping /Users/kockt/Desktop/tmp/notification.xml: not a snapshot or delta document
+INFO:__main__:Skipping ~/Desktop/tmp/notification.xml: not a snapshot or delta document
  33987 rsync://rpki.ripe.net/repository/DEFAULT/KpSo3VVK5wEHIJnHC2QHVV3d5mk.mft a596a776b24882a90696119f39498a6ee46c65429d5af697f01e3fd2fa686a9e 27228 2023-12-19 23:41:06
  34021 rsync://rpki.ripe.net/repository/DEFAULT/KpSo3VVK5wEHIJnHC2QHVV3d5mk.mft aae20f10e670c9e93f0992ff579b875deaadf09163c92281167654ed4e97515b 27229 2023-12-20 06:27:28
  34022 rsync://rpki.ripe.net/repository/DEFAULT/KpSo3VVK5wEHIJnHC2QHVV3d5mk.mft de29b8fb004513030924aa0505527947f17f688f2100b73a5a03e4d08d924b98 27230 2023-12-20 06:40:06
