@@ -191,7 +191,7 @@ def do_exit():
     ctx.exit(2)
 
 
-@click.command("Reconstruct repo state from snapshot/delta XML.")
+@click.command()
 @click.argument("infile", type=str)
 @click.argument("output_dir", type=click.Path(path_type=Path))
 @click.option("--create-target", help="Create target directory", is_flag=True)
@@ -209,7 +209,7 @@ def do_exit():
     is_flag=True,
     default=True,
 )
-def main(
+def reconstruct_repo(
     infile: str,
     output_dir: Path,
     create_target: bool,
@@ -280,4 +280,4 @@ def main(
 
 
 if __name__ == "__main__":
-    main()
+    reconstruct_repo()

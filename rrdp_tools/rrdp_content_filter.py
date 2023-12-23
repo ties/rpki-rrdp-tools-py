@@ -150,9 +150,10 @@ async def async_main(
     is_flag=True,
     help="Log the difference in FileAndHash set between the manifests",
 )
-def main(
+def rrdp_content_filter(
     path: Path, file_match: str, verbose: bool, log_content: bool, manifest_diff: bool
 ):
+    """Scan a set of RRDP documents and print out matching files."""
     if verbose:
         logging.basicConfig(level=logging.DEBUG)
     else:
@@ -162,4 +163,4 @@ def main(
 
 
 if __name__ == "__main__":
-    main()
+    rrdp_content_filter()
