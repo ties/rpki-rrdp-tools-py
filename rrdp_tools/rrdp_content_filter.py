@@ -91,7 +91,7 @@ def process_file(
             LOG.info("Skipping %s: not a snapshot or delta document", xml_file)
 
 
-async def async_main(
+async def filter_rrdp_content(
     path: Path, file_match: re.Pattern, log_content: bool, print_manifest_diff: bool
 ):
     files = list(path.glob("**/*.xml"))
@@ -136,7 +136,7 @@ async def async_main(
             click.echo(base64.b64encode(entry.content).decode("ascii"))
 
 
-@click.command()
+@click.command("filter-rrdp-content")
 @click.argument(
     "path",
     type=click.Path(exists=True, file_okay=False, resolve_path=True, path_type=Path),
@@ -150,16 +150,19 @@ async def async_main(
     is_flag=True,
     help="Log the difference in FileAndHash set between the manifests",
 )
-def main(
+def filter_rrdp_content_command(
     path: Path, file_match: str, verbose: bool, log_content: bool, manifest_diff: bool
 ):
+    """Scan a set of RRDP documents and print out matching files."""
     if verbose:
         logging.basicConfig(level=logging.DEBUG)
     else:
         logging.basicConfig(level=logging.INFO)
 
-    asyncio.run(async_main(path, re.compile(file_match), log_content, manifest_diff))
+    asyncio.run(
+        filter_rrdp_content(path, re.compile(file_match), log_content, manifest_diff)
+    )
 
 
 if __name__ == "__main__":
-    main()
+    filter_rrdp_content_command()

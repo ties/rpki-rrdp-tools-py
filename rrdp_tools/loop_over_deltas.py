@@ -93,7 +93,9 @@ async def attempt_delta_download(
     ),
 )
 @click.option("--verbose", help="verbose", count=True)
-def main(url_template: str, start: int, end: int, output_dir: Path, verbose: bool):
+def loop_over_deltas(
+    url_template: str, start: int, end: int, output_dir: Path, verbose: bool
+):
     """Loop over all the static guesses for the delta URL
 
     URL_TEMPLATE: URL to template the delta number into, {} will be replaced with delta number (e.g. https://rrdp.ripe.net/66221b75-cf14-4693-99e4-96ce9717c874/{}/delta.xml)
@@ -112,4 +114,4 @@ def main(url_template: str, start: int, end: int, output_dir: Path, verbose: boo
 
 
 if __name__ == "__main__":
-    main()
+    loop_over_deltas()

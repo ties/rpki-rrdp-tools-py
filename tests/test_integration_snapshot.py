@@ -12,8 +12,8 @@ DELTA_RE = re.compile(r"[0-9]+.xml")
 async def test_reconstruct(tmp_path: pathlib.Path) -> None:
     # Use a small RRDP repository to test the snapshot_rrdp function
     await snapshot_rrdp(
-        "https://rrdp.paas.rpki.ripe.net/notification.xml",
-        tmp_path,
+        notification_url="https://rrdp.paas.rpki.ripe.net/notification.xml",
+        output_path=tmp_path,
         include_session=True,
     )
 

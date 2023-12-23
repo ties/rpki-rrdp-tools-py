@@ -6,6 +6,9 @@ authors = ["Ties de Kock <ties@tiesdekock.nl>"]
 readme = "README.md"
 packages = [{include = "rrdp_tools"}]
 
+[project.scripts]
+rrdp-tools = "rrdp_tools.cli"
+
 [tool.poetry.dependencies]
 python = "^3.11"
 rnc2rng = "^2.6.6"
@@ -38,7 +41,7 @@ requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.black]
-target-version = ["py310"]
+target-version = ["py311"]
 include = '\.pyi?$'
 extend-exclude = '''
 /(
