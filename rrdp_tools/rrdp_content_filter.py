@@ -154,10 +154,11 @@ def filter_rrdp_content_command(
     path: Path, file_match: str, verbose: bool, log_content: bool, manifest_diff: bool
 ):
     """Scan a set of RRDP documents and print out matching files."""
+    logging.basicConfig()
     if verbose:
-        logging.basicConfig(level=logging.DEBUG)
+        logging.getLogger().setLevel(logging.DEBUG)
     else:
-        logging.basicConfig(level=logging.INFO)
+        logging.getLogger().setLevel(logging.INFO)
 
     asyncio.run(
         filter_rrdp_content(path, re.compile(file_match), log_content, manifest_diff)
