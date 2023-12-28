@@ -30,6 +30,12 @@ class ManifestInfo:
     ee_certificate: x509.Certificate
     file_list: FrozenSet[FileAndHash]
 
+    @property
+    def authority_information_access(self) -> str:
+        aia = self.ee_certificate.authority_information_access_value
+        assert len(aia) == 1
+        return aia[0].native["access_location"]
+
 
 def parse_manifest(content: bytes) -> ManifestInfo:
     info = cms.ContentInfo.load(content)
