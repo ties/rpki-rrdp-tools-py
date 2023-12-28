@@ -44,3 +44,5 @@ def test_parse_manifest():
             for entry in mft.file_list:
                 assert entry.file_name is not None
                 assert entry.hash is not None
+
+            assert mft.authority_information_access.startswith("rsync://rpki.ripe.net")

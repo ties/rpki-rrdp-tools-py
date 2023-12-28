@@ -40,6 +40,8 @@ class ManifestMatch:
     previous_hash: Optional[str]
     h_content: Union[str, None] = None
 
+    authority_information_access: Optional[str] = None
+
 
 @dataclass
 class PublishMatch:
@@ -76,6 +78,7 @@ def process_file(
                                     session_id=doc.session_id,
                                     **dataclasses.asdict(elem),
                                     **dataclasses.asdict(mft),
+                                    authority_information_access=mft.authority_information_access,
                                 )
                             else:
                                 time = parse_file_time(uri, content)
@@ -110,7 +113,7 @@ async def filter_rrdp_content(
         match entry:
             case ManifestMatch():
                 click.echo(
-                    f"{entry.serial:>6} {entry.uri} {entry.h_content} {entry.manifest_number:>4} {entry.signing_time:%Y-%m-%d %H:%M:%S}"
+                    f"{entry.serial:>6} {entry.uri} {entry.h_content} {entry.manifest_number:>4} {entry.signing_time:%Y-%m-%d %H:%M:%S} {entry.authority_information_access}"
                 )
                 previous = previous_manifest.get(entry.uri, None)
                 previous_manifest[entry.uri] = entry
