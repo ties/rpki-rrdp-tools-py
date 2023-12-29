@@ -4,7 +4,7 @@ import pathlib
 
 import pytest
 
-from rrdp_tools.rpki import parse_file_time, parse_manifest
+from rrdp_tools.rpki import parse_certificate, parse_file_time, parse_manifest
 
 LOG = logging.getLogger(__name__)
 
@@ -46,3 +46,13 @@ def test_parse_manifest():
                 assert entry.hash is not None
 
             assert mft.authority_information_access.startswith("rsync://rpki.ripe.net")
+
+
+def test_parse_certificate_explicit_resources():
+    sample_files = pathlib.Path(__file__).parent / "data/"
+
+    for file in ("pwm_xK1wpqd-kXa4hQqCuOTEu8U.cer", "ripe-ncc-ta.cer"):
+        with (sample_files / file).open("rb") as f:
+            cert = parse_certificate(f.read())
+            assert cert.ip_resources is not None
+            assert cert.as_resources is not None
