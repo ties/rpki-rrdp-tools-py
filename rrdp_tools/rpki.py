@@ -139,11 +139,16 @@ def parse_rfc3779_extension(ipaddr_extension: bytes) -> Rfc3779Extension:
                             bits, mask = address_content
                             # expand bits to correct length
                             target_len = 128 // 8 if ip_version == 6 else 32 // 8
-                            bits += b"\x00" * (len(bits) - target_len)
+                            bits += b"\x00" * (target_len - len(bits))
+                            # invariant
+                            assert len(bits) == target_len
 
                             ip_as_int = int.from_bytes(
                                 bits, byteorder="big", signed=False
                             )
+                            # ensure that mask length matches prefix length
+                            assert len(bin(ip_as_int)[2:].rstrip("0")) <= mask
+
                             addr = netaddr.IPNetwork(
                                 (ip_as_int, mask), version=ip_version
                             )
