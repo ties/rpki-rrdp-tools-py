@@ -147,6 +147,7 @@ class SnapshotDocument:
 
 @dataclass
 class DeltaElement:
+    serial: int
     hash: str
     uri: str
 
@@ -177,7 +178,11 @@ def parse_notification_file(notificiation_file: TextIO) -> NotificationElement:
     assert doc.tag == "{http://www.ripe.net/rpki/rrdp}notification"
 
     deltas = [
-        DeltaElement(hash=delta.attrib["hash"], uri=delta.attrib["uri"])
+        DeltaElement(
+            serial=delta.attrib["serial"],
+            hash=delta.attrib["hash"],
+            uri=delta.attrib["uri"],
+        )
         for delta in delta_elements
     ]
 
