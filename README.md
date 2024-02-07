@@ -64,6 +64,7 @@ INFO:__main__:Skipping /Users/kockt/Desktop/tmp/notification.xml: not a snapshot
   * Handle XML schema validation failures more gracefully
   * Print the difference in files between successive manifests (`--manifest-diff`)
   * Introduce a main cli entrypoint (`rrdp_tools.cli`)
+  * re-use rrdp parser in `snapshot_rrdp.py`
 
 ## v0.2.1:
   * Set timestamp of downloaded files from `last-modified` header.

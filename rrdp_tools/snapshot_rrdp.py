@@ -11,9 +11,8 @@ from typing import Optional
 
 import aiohttp
 import click
-from lxml import etree
 
-from .rrdp import validate
+from .rrdp import parse_notification_file
 
 logging.basicConfig()
 LOG = logging.getLogger(__name__)
@@ -125,21 +124,22 @@ async def snapshot_rrdp(
             click.echo(f"HTTP {res.status} from RRDP server, aborting")
             click.echo(f"reason: {await res.text()}")
             return
-        doc = etree.fromstring(await res.text())
-        validate(doc)
 
-        assert doc.tag == "{http://www.ripe.net/rpki/rrdp}notification"
-        session_id = doc.attrib["session_id"]
-        serial = doc.attrib["serial"]
+        notification = parse_notification_file(await res.text())
 
-        LOG.info("%s serial=%s session_id=%s", notification_url, serial, session_id)
+        LOG.info(
+            "%s serial=%s session_id=%s",
+            notification_url,
+            notification.serial,
+            notification.session_id,
+        )
 
-        if not session_id:
+        if not notification.session_id:
             print("No session_id in notification file!")
             sys.exit(1)
 
         if include_session:
-            output_path = output_path / session_id
+            output_path = output_path / notification.session_id
             output_path.mkdir(parents=True, exist_ok=True)
 
         # Document is valid,
@@ -149,36 +149,31 @@ async def snapshot_rrdp(
 
         queue = []
 
-        snapshot = doc.find("{http://www.ripe.net/rpki/rrdp}snapshot")
         if not skip_snapshot:
-            snapshot_hash = snapshot.attrib["hash"]
-            file_name = f"snapshot-{serial}.xml"
+            file_name = f"snapshot-{notification.serial}.xml"
             queue.append(
                 get_and_check(
                     sem,
                     session,
                     output_path / file_name,
-                    snapshot.attrib["uri"],
-                    snapshot_hash,
+                    notification.snapshot.uri,
+                    notification.snapshot.hash,
                     override_host=override_host,
                     hash_in_name=include_hash,
                 )
             )
 
-        deltas = doc.findall("{http://www.ripe.net/rpki/rrdp}delta")
-        for idx, delta in enumerate(deltas):
+        for idx, delta in enumerate(notification.deltas):
             if limit_deltas is not None and idx >= limit_deltas:
                 break
-            serial = delta.attrib["serial"]
-            delta_hash = delta.attrib["hash"]
-            file_name = f"{serial}.xml"
+            file_name = f"{delta.serial}.xml"
             queue.append(
                 get_and_check(
                     sem,
                     session,
                     output_path / file_name,
-                    delta.attrib["uri"],
-                    delta_hash,
+                    delta.uri,
+                    delta.hash,
                     override_host=override_host,
                     hash_in_name=include_hash,
                 )

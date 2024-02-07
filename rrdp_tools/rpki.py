@@ -27,6 +27,8 @@ class FileAndHash:
 class ManifestInfo:
     manifest_number: int
     signing_time: datetime
+    this_update: datetime
+    next_update: datetime
     ee_certificate: x509.Certificate
     file_list: FrozenSet[FileAndHash]
 
@@ -56,6 +58,8 @@ def parse_manifest(content: bytes) -> ManifestInfo:
     return ManifestInfo(
         manifest_number=mft["manifestNumber"],
         signing_time=signing_time,
+        this_update=mft["thisUpdate"],
+        next_update=mft["nextUpdate"],
         ee_certificate=signed_data["certificates"][0].chosen,
         file_list=frozenset(
             FileAndHash(file_name=entry["file"], hash=bytes(entry["hash"][0]))

@@ -40,6 +40,11 @@ def test_parse_manifest():
             mft = parse_manifest(f.read())
             assert mft.ee_certificate is not None
             assert mft.signing_time >= mft.ee_certificate.not_valid_before
+            assert mft.signing_time <= mft.ee_certificate.not_valid_after
+            assert mft.this_update <= mft.next_update
+            assert mft.this_update >= mft.ee_certificate.not_valid_before
+            assert mft.next_update <= mft.ee_certificate.not_valid_after
+
             assert mft.manifest_number > 0
             for entry in mft.file_list:
                 assert entry.file_name is not None
