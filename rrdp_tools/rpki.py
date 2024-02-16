@@ -2,7 +2,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import FrozenSet
+from typing import FrozenSet, Optional
 
 import asn1tools
 from asn1crypto import cms, crl, x509
@@ -12,6 +12,32 @@ LOG = logging.getLogger(__name__)
 asn1_src = Path(__file__).parent / "rfc9286.asn"
 assert asn1_src.exists()
 RFC_9286_ASN1 = asn1tools.compile_files(str(asn1_src), cache_dir="asn1")
+
+
+@dataclass
+class RpkiSignedObject:
+    signing_time: Optional[datetime]
+    ee_certificate: x509.Certificate
+    content: bytes
+
+
+def parse_rpki_signed_object(content: bytes) -> RpkiSignedObject:
+    info = cms.ContentInfo.load(content)
+    assert info["content_type"].native == "signed_data"
+    signed_data = info["content"]
+    signer = signed_data["signer_infos"][0]
+
+    signing_time = None
+
+    for attr in signer["signed_attrs"]:
+        if attr["type"].native == "signing_time":
+            signing_time = attr["values"][0].native
+
+    return RpkiSignedObject(
+        signing_time,
+        signed_data["certificates"][0].chosen,
+        signed_data["encap_content_info"]["content"].native,
+    )
 
 
 @dataclass(frozen=True, order=True)
@@ -40,27 +66,19 @@ class ManifestInfo:
 
 
 def parse_manifest(content: bytes) -> ManifestInfo:
-    info = cms.ContentInfo.load(content)
-    assert info["content_type"].native == "signed_data"
-    signed_data = info["content"]
-    signer = signed_data["signer_infos"][0]
-
-    signing_time = None
-
-    for attr in signer["signed_attrs"]:
-        if attr["type"].native == "signing_time":
-            signing_time = attr["values"][0].native
+    so = parse_rpki_signed_object(content)
 
     mft = RFC_9286_ASN1.decode(
-        "Manifest", signed_data["encap_content_info"]["content"].native
+        "Manifest",
+        so.content,
     )
 
     return ManifestInfo(
         manifest_number=mft["manifestNumber"],
-        signing_time=signing_time,
+        signing_time=so.signing_time,
         this_update=mft["thisUpdate"],
         next_update=mft["nextUpdate"],
-        ee_certificate=signed_data["certificates"][0].chosen,
+        ee_certificate=so.ee_certificate,
         file_list=frozenset(
             FileAndHash(file_name=entry["file"], hash=bytes(entry["hash"][0]))
             for entry in mft["fileList"]
