@@ -9,9 +9,17 @@ from asn1crypto import cms, crl, x509
 
 LOG = logging.getLogger(__name__)
 
-asn1_src = Path(__file__).parent / "rfc9286.asn"
-assert asn1_src.exists()
-RFC_9286_ASN1 = asn1tools.compile_files(str(asn1_src), cache_dir="asn1")
+RFC9286_ASN1_SRC = Path(__file__).parent / "rfc9286.asn"
+assert RFC9286_ASN1_SRC.exists()
+RFC_9286_ASN1 = asn1tools.compile_files(str(RFC9286_ASN1_SRC), cache_dir="asn1")
+
+DRAFT_SIGNED_PREFIX_LIST_ASN1_SRC = (
+    Path(__file__).parent / "draft-ietf-sidrops-rpki-prefixlist-02.asa"
+)
+assert DRAFT_SIGNED_PREFIX_LIST_ASN1_SRC.exists()
+DRAFT_SIGNED_PREFIX_LIST_ASN1 = asn1tools.compile_files(
+    str(DRAFT_SIGNED_PREFIX_LIST_ASN1_SRC), cache_dir="asn1"
+)
 
 
 @dataclass
@@ -65,6 +73,32 @@ class ManifestInfo:
         return aia[0].native["access_location"]
 
 
+@dataclass
+class RpkiSignedObject:
+    signing_time: Optional[datetime]
+    ee_certificate: x509.Certificate
+    content: bytes
+
+
+def parse_rpki_signed_object(content: bytes) -> RpkiSignedObject:
+    info = cms.ContentInfo.load(content)
+    assert info["content_type"].native == "signed_data"
+    signed_data = info["content"]
+    signer = signed_data["signer_infos"][0]
+
+    signing_time = None
+
+    for attr in signer["signed_attrs"]:
+        if attr["type"].native == "signing_time":
+            signing_time = attr["values"][0].native
+
+    return RpkiSignedObject(
+        signing_time,
+        signed_data["certificates"][0].chosen,
+        signed_data["encap_content_info"]["content"].native,
+    )
+
+
 def parse_manifest(content: bytes) -> ManifestInfo:
     so = parse_rpki_signed_object(content)
 
@@ -84,6 +118,21 @@ def parse_manifest(content: bytes) -> ManifestInfo:
             for entry in mft["fileList"]
         ),
     )
+
+
+def parse_signed_prefix_list(content: bytes) -> object:
+    so = parse_rpki_signed_object(content)
+
+    spl = DRAFT_SIGNED_PREFIX_LIST_ASN1.decode(
+        "RpkiSignedPrefixList",
+        so.content,
+    )
+
+    import ipdb
+
+    ipdb.set_trace()
+
+    return spl
 
 
 def parse_file_time(file_name: str, content: bytes) -> datetime:

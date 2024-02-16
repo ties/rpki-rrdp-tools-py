@@ -51,3 +51,11 @@ def test_parse_manifest():
                 assert entry.hash is not None
 
             assert mft.authority_information_access.startswith("rsync://rpki.ripe.net")
+
+
+def test_parse_signed_prefix_list():
+    sample_files = pathlib.Path(__file__).parent / "data/"
+    for file in ("9X0AhXWTJDl8lJhfOwvnac-42CA.spl",):
+        with (sample_files / file).open("rb") as f:
+            spl = parse_manifest(f.read())
+            assert spl

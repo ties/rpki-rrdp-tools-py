@@ -1,0 +1,54 @@
+-- note: id-mod-rpkiSignedPrefixList is TBD but a value is required by the ASN.1 compiler.
+RpkiSignedPrefixList-2024
+  { iso(1) member-body(2) us(840) rsadsi(113549)
+    pkcs(1) pkcs9(9) smime(16) mod(0)
+    id-mod-rpkiSignedPrefixList-2024(76) }
+
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+
+IMPORTS
+  CONTENT-TYPE
+  FROM CryptographicMessageSyntax-2010 -- in [RFC6268]
+    { iso(1) member-body(2) us(840) rsadsi(113549) pkcs(1)
+      pkcs-9(9) smime(16) modules(0) id-mod-cms-2009(58) } ;
+
+ct-rpkiSignedPrefixList CONTENT-TYPE ::=
+  { TYPE RpkiSignedPrefixList
+    IDENTIFIED BY id-ct-rpkiSignedPrefixList }
+
+id-ct-rpkiSignedPrefixList OBJECT IDENTIFIER ::=
+  { iso(1) member-body(2) us(840) rsadsi(113549) pkcs(1)
+    pkcs-9(9) id-smime(16) id-ct(1) 51 }
+
+RpkiSignedPrefixList ::= SEQUENCE {
+  version [0]     INTEGER (0..MAX) DEFAULT 0,
+  asID            INTEGER (1..4294967295),
+  prefixBlocks    SEQUENCE (SIZE(0..2)) OF AddressFamilyAddressPrefixes }
+
+AddressFamilyAddressPrefixes ::= SEQUENCE {
+  addressFamily   ADDRESS-FAMILY.&afi ({AddressFamilySet}),
+  addressPrefixes ADDRESS-FAMILY.&Prefixes ({AddressFamilySet}{@addressFamily}) }
+
+ADDRESS-FAMILY ::= CLASS {
+  &afi          OCTET STRING (SIZE(2)) UNIQUE,
+  &Prefixes
+} WITH SYNTAX { AFI &afi PREFIXES &Prefixes }
+
+AddressFamilySet ADDRESS-FAMILY ::= { addressFamilyIPv4 | addressFamilyIPv6 }
+
+addressFamilyIPv4 ADDRESS-FAMILY ::= { AFI afi-IPv4 PREFIXES IPv4Prefixes }
+addressFamilyIPv6 ADDRESS-FAMILY ::= { AFI afi-IPv6 PREFIXES IPv6Prefixes }
+
+afi-IPv4 OCTET STRING ::= '0001'H
+afi-IPv6 OCTET STRING ::= '0002'H
+
+IPv4Prefixes ::= SEQUENCE (SIZE(1..MAX)) OF AddressPrefix{ub-IPv4}
+IPv6Prefixes ::= SEQUENCE (SIZE(1..MAX)) OF AddressPrefix{ub-IPv6}
+
+ub-IPv4 INTEGER ::= 32
+ub-IPv6 INTEGER ::= 128
+
+AddressPrefix {INTEGER: ub} ::= BIT STRING (SIZE(0..ub))
+
+END
