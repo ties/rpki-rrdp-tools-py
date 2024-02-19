@@ -4,7 +4,7 @@ import pathlib
 
 import pytest
 
-from rrdp_tools.rpki import parse_file_time, parse_manifest
+from rrdp_tools.rpki import parse_file_time, parse_manifest, parse_signed_prefix_list
 
 LOG = logging.getLogger(__name__)
 
@@ -57,5 +57,5 @@ def test_parse_signed_prefix_list():
     sample_files = pathlib.Path(__file__).parent / "data/"
     for file in ("9X0AhXWTJDl8lJhfOwvnac-42CA.spl",):
         with (sample_files / file).open("rb") as f:
-            spl = parse_manifest(f.read())
+            spl = parse_signed_prefix_list(f.read())
             assert spl

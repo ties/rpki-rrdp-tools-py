@@ -1,0 +1,35 @@
+-- note: id-mod-rpkiSignedPrefixList is TBD but a value is required by the ASN.1 compiler.
+RpkiSignedPrefixList-2024
+  { iso(1) member-body(2) us(840) rsadsi(113549)
+    pkcs(1) pkcs9(9) smime(16) mod(0)
+    id-mod-rpkiSignedPrefixList-2024(76) }
+
+
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+
+IMPORTS
+ CONTENT-TYPE
+ FROM CryptographicMessageSyntax-2010 -- in [RFC6268]
+   { iso(1) member-body(2) us(840) rsadsi(113549) pkcs(1)
+     pkcs-9(9) smime(16) modules(0) id-mod-cms-2009(58) } ;
+
+ct-rpkiSignedPrefixList CONTENT-TYPE ::=
+ { TYPE RpkiSignedPrefixList
+   IDENTIFIED BY id-ct-rpkiSignedPrefixList }
+
+id-ct-rpkiSignedPrefixList OBJECT IDENTIFIER ::=
+ { iso(1) member-body(2) us(840) rsadsi(113549) pkcs(1)
+   pkcs-9(9) id-smime(16) id-ct(1) 51 }
+
+RpkiSignedPrefixList ::= SEQUENCE {
+ version [0]     INTEGER (0..MAX) DEFAULT 0,
+ asID            INTEGER (1..4294967295),
+ prefixes        SEQUENCE (SIZE(0..2)) OF AddressFamilyAddressPrefixes }
+
+AddressFamilyAddressPrefixes ::= SEQUENCE {
+ addressFamily   OCTET STRING (SIZE(2)),
+ addressPrefixes SEQUENCE (SIZE(1..MAX)) OF BIT STRING
+}
+
+END
