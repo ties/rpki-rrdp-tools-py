@@ -41,6 +41,8 @@ class ManifestMatch:
     h_content: Union[str, None] = None
 
     authority_information_access: Optional[str] = None
+    this_update: Optional[str] = None
+    next_update: Optional[str] = None
 
 
 @dataclass
