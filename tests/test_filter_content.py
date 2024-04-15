@@ -36,9 +36,10 @@ async def test_filter_files(caplog):
     assert matches[PublishMatch] > 5
 
     # Now filter for mft
+    mft_matches = Counter()
     for file_name in dir.glob("**/*.xml"):
-        for f in process_file(file_name, re.compile(r".*\\.mft")):
-            matches[type(f)] += 1
+        for f in process_file(file_name, re.compile(r".*\.mft")):
+            mft_matches[type(f)] += 1
 
-    assert matches[ManifestMatch] > 5
-    assert matches[PublishMatch] == 0
+    assert mft_matches[ManifestMatch] > 5
+    assert mft_matches[PublishMatch] == 0
