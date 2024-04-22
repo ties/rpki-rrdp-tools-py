@@ -2,14 +2,17 @@ import asyncio
 import base64
 import dataclasses
 import datetime
+import itertools
 import logging
+import multiprocessing
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, FrozenSet, Generator, Optional, Union
+from typing import Dict, FrozenSet, Generator, List, Optional, Union
 
 import asn1crypto
 import click
+from alive_progress import alive_bar
 
 from rrdp_tools.rpki import FileAndHash, parse_file_time, parse_manifest
 from rrdp_tools.rrdp import (
@@ -62,7 +65,10 @@ class PublishMatch:
 
 
 def process_file(
-    xml_file: Path, file_match: re.Pattern, log_content: bool = False
+    xml_file: Path,
+    file_match: re.Pattern,
+    log_content: bool = False,
+    progress_bar: Optional[alive_bar] = None,
 ) -> Generator[ManifestMatch | PublishMatch, None, None]:
     LOG.debug("processing %s", xml_file)
 
@@ -94,24 +100,43 @@ def process_file(
             LOG.error("%s is not a valid RRDP document", xml_file)
         except UnexpectedDocumentException:
             LOG.info("Skipping %s: not a snapshot or delta document", xml_file)
+        finally:
+            if progress_bar:
+                progress_bar()
+
+
+def process_file_to_list(
+    xml_file: Path, file_match: re.Pattern, log_content: bool = False
+) -> List[ManifestMatch | PublishMatch]:
+    return list(process_file(xml_file, file_match, log_content))
 
 
 async def filter_rrdp_content(
-    path: Path, file_match: re.Pattern, log_content: bool, print_manifest_diff: bool
+    path: Path,
+    file_match: re.Pattern,
+    log_content: bool,
+    print_manifest_diff: bool,
+    store_content: Optional[Path],
 ):
     files = list(path.glob("**/*.xml"))
     LOG.info("found %d files", len(files))
 
-    matches = []
-
-    for xml_file in files:
-        LOG.debug("processing %s", xml_file)
-        matches.extend(list(process_file(xml_file, file_match, log_content)))
+    with multiprocessing.Pool() as pool:
+        match_lists = pool.starmap(
+            process_file_to_list,
+            [(xml_file, file_match, log_content) for xml_file in files],
+        )
+    matches = list(itertools.chain.from_iterable(match_lists))
 
     # map uri -> previous manifest
     previous_manifest: Dict[str, ManifestMatch] = {}
 
     for entry in sorted(matches, key=lambda x: x.serial):
+        if store_content:
+            file_name = entry.uri.split("/")[-1]
+            with (store_content / f"{entry.serial:06d}_{file_name}").open("wb") as f:
+                f.write(entry.content)
+
         match entry:
             case ManifestMatch():
                 click.echo(
@@ -150,13 +175,23 @@ async def filter_rrdp_content(
 @click.option("--verbose", "-v", is_flag=True)
 @click.option("--log-content", "-l", is_flag=True)
 @click.option(
+    "--store-content",
+    type=click.Path(dir_okay=True, path_type=Path, exists=True, resolve_path=True),
+    default=None,
+)
+@click.option(
     "--manifest-diff",
     "-m",
     is_flag=True,
     help="Log the difference in FileAndHash set between the manifests",
 )
 def filter_rrdp_content_command(
-    path: Path, file_match: str, verbose: bool, log_content: bool, manifest_diff: bool
+    path: Path,
+    file_match: str,
+    verbose: bool,
+    log_content: bool,
+    manifest_diff: bool,
+    store_content: Optional[Path],
 ):
     """Scan a set of RRDP documents and print out matching files."""
     logging.basicConfig()
@@ -166,7 +201,13 @@ def filter_rrdp_content_command(
         logging.getLogger().setLevel(logging.INFO)
 
     asyncio.run(
-        filter_rrdp_content(path, re.compile(file_match), log_content, manifest_diff)
+        filter_rrdp_content(
+            path,
+            re.compile(file_match),
+            log_content,
+            manifest_diff,
+            store_content=store_content,
+        )
     )
 
 
