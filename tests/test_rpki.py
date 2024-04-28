@@ -51,3 +51,4 @@ def test_parse_manifest():
                 assert entry.hash is not None
 
             assert mft.authority_information_access.startswith("rsync://rpki.ripe.net")
+            assert mft.subject_information_access == "rsync://rpki.ripe.net/repository/ripe-ncc-ta.mft"
