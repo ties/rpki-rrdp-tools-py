@@ -9,9 +9,11 @@ from asn1crypto import cms, crl, x509
 
 LOG = logging.getLogger(__name__)
 
-asn1_src = Path(__file__).parent / "rfc9286.asn"
+THIS_DIR = Path(__file__).parent
+
+asn1_src = THIS_DIR / "rfc9286.asn"
 assert asn1_src.exists()
-RFC_9286_ASN1 = asn1tools.compile_files(str(asn1_src), cache_dir="asn1")
+RFC_9286_ASN1 = asn1tools.compile_files(str(asn1_src), cache_dir=str(THIS_DIR / "asn1"))
 
 
 @dataclass
