@@ -1,3 +1,0 @@
-lxml>=4.6.3
-rnc2rng>=2.6.1
-requests>=2.28.1
