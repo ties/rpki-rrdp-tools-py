@@ -55,6 +55,26 @@ INFO:__main__:Skipping /Users/kockt/Desktop/tmp/notification.xml: not a snapshot
 ...
 ```
 
+# Usage in SQL
+
+This library can also be used in PostgreSQL if you install the library into the
+system python installation. This will enables some joins or the extraction of
+additional information.
+
+The SQL is in `rpki-plpython3u.sql`. This also contains some example queries.
+Approximate steps to install:
+  * Clone this repository in a directory readable by the postgres user
+  * Install into the python packages for the user postgres runs as (e.g. `sudo -u postgres pip3 install .`)
+  * Install the `plpython3u` extension and the code into the relevant database: `cat rpki-plpython3u.sql| psql delta`
+
+```sql
+delta=# select manifest_sia(content) as sia, manifest_aia(content) as aia, visibleon, disappearedon FROM objects where uri LIKE 'rsync://rpki.ripe.net/repository/ripe-ncc-ta.mft' limit 1;
+                       sia                        |                   aia                    |   visibleon   | disappearedon 
+--------------------------------------------------+------------------------------------------+---------------+---------------
+ rsync://rpki.ripe.net/repository/ripe-ncc-ta.mft | rsync://rpki.ripe.net/ta/ripe-ncc-ta.cer | 1704890978016 | 1704891117362
+(1 row)
+```
+
 # Changelog
 
 ## main:
