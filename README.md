@@ -59,6 +59,7 @@ INFO:__main__:Skipping /Users/kockt/Desktop/tmp/notification.xml: not a snapshot
 
 ## main:
 
+  * Explicitly include multidict 6.0.5 to install on Fedora 40
   * Add RRDP content filtering/dumping sub-command
   * Incorporate [erratum](https://www.rfc-editor.org/errata/eid7118) into rfc9286 asn1 (reported by @job).
   * Handle XML schema validation failures more gracefully

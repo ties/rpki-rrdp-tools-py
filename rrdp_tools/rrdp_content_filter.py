@@ -116,7 +116,7 @@ async def filter_rrdp_content(
     file_match: re.Pattern,
     log_content: bool,
     print_manifest_diff: bool,
-    store_content: Optional[Path],
+    store_content: Optional[Path] = None,
 ):
     files = list(path.glob("**/*.xml"))
     LOG.info("found %d files", len(files))

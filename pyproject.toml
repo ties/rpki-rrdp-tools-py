@@ -20,6 +20,7 @@ asn1tools = "^0.166.0"
 diskcache = "^5.6.3"
 pylint = "^3.0.3"
 alive-progress = "^3.1.5"
+multidict = "^6.0.5"
 
 [tool.poetry.group.dev.dependencies]
 ipdb = "^0.13.9"

@@ -36,7 +36,7 @@ jobs:
           poetry run flake8 rrdp_tools tests
           poetry run black --check --diff rrdp_tools tests
       - name: test
-        run: poetry run pytest --cov sagemcom_f3896 --cov-report html -qq -o console_output_style=count -p no:sugar tests
+        run: poetry run pytest --cov rrdp_tools --cov-report html -qq -o console_output_style=count -p no:sugar tests
       - name: package and test packaging
         run: |
           poetry build
