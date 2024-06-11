@@ -6,6 +6,7 @@ import hashlib
 import logging
 from dataclasses import dataclass
 from typing import Generator, List, Optional, TextIO, Union
+from xml.etree import ElementTree as ET
 
 from lxml import etree
 from lxml.etree import RelaxNG
@@ -13,6 +14,7 @@ from lxml.etree import RelaxNG
 LOG = logging.getLogger(__name__)
 
 NS_RRDP = "http://www.ripe.net/rpki/rrdp"
+NS_ET = f"{{{NS_RRDP}}}"
 
 SCHEMA = RelaxNG.from_rnc_string(
     """
@@ -115,6 +117,14 @@ class PublishElement:
     def __repr__(self) -> str:
         return f"PublishElement[uri={self.uri}, previous_hash={self.previous_hash if self.previous_hash else 'N/A'}, sha256(content)={self.h_content}b"
 
+    def to_xml(self, parent: ET.Element) -> None:
+        attribs = {NS_ET + "uri": self.uri}
+        if self.previous_hash:
+            attribs[NS_ET + "hash"] = self.previous_hash
+
+        node = ET.SubElement(parent, "{http://www.ripe.net/rpki/rrdp}publish", attribs)
+        node.text = base64.b64encode(self.content).decode("utf-8")
+
 
 @dataclass(unsafe_hash=True)
 class WithdrawElement:
@@ -124,18 +134,43 @@ class WithdrawElement:
     def __repr__(self) -> str:
         return f"WithdrawElement[uri={self.uri}, hash={self.hash}"
 
+    def to_xml(self, parent: ET.Element) -> None:
+        attribs = {NS_ET + "uri": self.uri, NS_ET + "hash": self.hash}
+        ET.SubElement(parent, "{http://www.ripe.net/rpki/rrdp}withdraw", attribs)
+
+
+RrdpElement = Union[PublishElement, WithdrawElement]
+
 
 @dataclass
 class SnapshotElement:
     hash: str
     uri: str
 
+    def to_xml(self, parent: ET.Element) -> None:
+        attribs = {NS_ET + "uri": self.uri, NS_ET + "hash": self.hash}
+        ET.SubElement(parent, "{http://www.ripe.net/rpki/rrdp}snapshot", attribs)
+
 
 @dataclass
 class DeltaDocument:
     serial: int
     session_id: str
-    content: List[PublishElement | WithdrawElement]
+    content: List[RrdpElement]
+
+    def to_xml(self) -> ET.Element:
+        attribs = {
+            NS_ET + "serial": str(self.serial),
+            NS_ET + "session_id": self.session_id,
+            NS_ET + "version": "1",
+        }
+        root = ET.Element("{http://www.ripe.net/rpki/rrdp}delta", attribs)
+        for elem_content in self.content:
+            elem_content.to_xml(root)
+        return root
+
+    def __str__(self) -> str:
+        return ET.tostring(self.to_xml(), default_namespace=NS_RRDP).decode("utf-8")
 
 
 @dataclass
@@ -144,6 +179,20 @@ class SnapshotDocument:
     session_id: str
     content: List[PublishElement]
 
+    def to_xml(self) -> ET.Element:
+        attribs = {
+            NS_ET + "serial": str(self.serial),
+            NS_ET + "session_id": self.session_id,
+            NS_ET + "version": "1",
+        }
+        root = ET.Element("{http://www.ripe.net/rpki/rrdp}snapshot", attribs)
+        for elem_content in self.content:
+            elem_content.to_xml(root)
+        return root
+
+    def __str__(self) -> str:
+        return ET.tostring(self.to_xml(), default_namespace=NS_RRDP).decode("utf-8")
+
 
 @dataclass
 class DeltaElement:
@@ -151,19 +200,40 @@ class DeltaElement:
     hash: str
     uri: str
 
+    def to_xml(self, parent: ET.Element) -> None:
+        attribs = {
+            NS_ET + "serial": self.serial,
+            NS_ET + "hash": self.hash,
+            NS_ET + "uri": self.uri,
+        }
+
+        ET.SubElement(parent, "{http://www.ripe.net/rpki/rrdp}delta", attribs)
+
 
 @dataclass
-class NotificationElement:
+class NotificationDocument:
     snapshot: SnapshotElement
     deltas: list[DeltaElement]
     serial: int
     session_id: str
 
+    def to_xml(self) -> ET.Element:
+        attribs = {
+            NS_ET + "serial": str(self.serial),
+            NS_ET + "session_id": self.session_id,
+            NS_ET + "version": "1",
+        }
+        root = ET.Element("{http://www.ripe.net/rpki/rrdp}notification", attribs)
+        self.snapshot.to_xml(root)
+        for delta in self.deltas:
+            delta.to_xml(root)
+        return root
 
-RrdpElement = Union[PublishElement, WithdrawElement]
+    def __str__(self) -> str:
+        return ET.tostring(self.to_xml(), default_namespace=NS_RRDP).decode("utf-8")
 
 
-def parse_notification_file(notificiation_file: TextIO) -> NotificationElement:
+def parse_notification_file(notificiation_file: TextIO) -> NotificationDocument:
     huge_parser = etree.XMLParser(encoding="utf-8", recover=False, huge_tree=True)
     doc = etree.fromstring(notificiation_file, parser=huge_parser)
     validate(doc)
@@ -186,7 +256,7 @@ def parse_notification_file(notificiation_file: TextIO) -> NotificationElement:
         for delta in delta_elements
     ]
 
-    return NotificationElement(
+    return NotificationDocument(
         snapshot=snapshot,
         deltas=deltas,
         serial=int(doc.attrib["serial"]),

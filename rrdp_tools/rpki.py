@@ -15,8 +15,10 @@ asn1_src = THIS_DIR / "rfc9286.asn"
 assert asn1_src.exists()
 # Try to cache the ASN1 if possible
 try:
-    RFC_9286_ASN1 = asn1tools.compile_files(str(asn1_src), cache_dir=str(THIS_DIR / "asn1"))
-except:
+    RFC_9286_ASN1 = asn1tools.compile_files(
+        str(asn1_src), cache_dir=str(THIS_DIR / "asn1")
+    )
+except:  # noqa
     RFC_9286_ASN1 = asn1tools.compile_files(str(asn1_src), cache_dir=None)
 
 ID_AD_SIGNED_OBJECT = "1.3.6.1.5.5.7.48.11"
@@ -70,15 +72,15 @@ class ManifestInfo:
     def authority_information_access(self) -> str:
         aias = self.ee_certificate.authority_information_access_value.native
         for aia in aias:
-            if aia['access_method'] == 'ca_issuers':
-                return aia['access_location']
-    
+            if aia["access_method"] == "ca_issuers":
+                return aia["access_location"]
+
     @property
     def subject_information_access(self) -> str:
         sias = self.ee_certificate.subject_information_access_value.native
         for sia in sias:
-            if sia['access_method'] == ID_AD_SIGNED_OBJECT:
-                return sia['access_location']
+            if sia["access_method"] == ID_AD_SIGNED_OBJECT:
+                return sia["access_location"]
         return None
 
 

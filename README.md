@@ -69,7 +69,7 @@ Approximate steps to install:
 
 ```sql
 delta=# select manifest_sia(content) as sia, manifest_aia(content) as aia, visibleon, disappearedon FROM objects where uri LIKE 'rsync://rpki.ripe.net/repository/ripe-ncc-ta.mft' limit 1;
-                       sia                        |                   aia                    |   visibleon   | disappearedon 
+                       sia                        |                   aia                    |   visibleon   | disappearedon
 --------------------------------------------------+------------------------------------------+---------------+---------------
  rsync://rpki.ripe.net/repository/ripe-ncc-ta.mft | rsync://rpki.ripe.net/ta/ripe-ncc-ta.cer | 1704890978016 | 1704891117362
 (1 row)
@@ -79,6 +79,7 @@ delta=# select manifest_sia(content) as sia, manifest_aia(content) as aia, visib
 
 ## main:
 
+  * Serialise _to_ XML from RRDP datastructures
   * Parse manifest SIA
   * Explicitly include multidict 6.0.5 to install on Fedora 40
   * Add RRDP content filtering/dumping sub-command
