@@ -6,7 +6,7 @@ authors = [
   {  name = "Ties de Kock", email = "ties@tiesdekock.nl>" }
 ]
 readme = "README.md"
-requires-python = ">=3.11, <4"
+requires-python = ">=3.12, <4"
 packages = [{include = "rrdp_tools"}]
 dependencies  = [
   "rnc2rng>=2.6.6",
