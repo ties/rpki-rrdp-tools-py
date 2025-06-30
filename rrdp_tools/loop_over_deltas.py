@@ -63,7 +63,9 @@ async def attempt_delta_download(
 ) -> None:
     queue = asyncio.Queue()
 
+    # the filename is not controlled by external input.
     for delta_number in range(min_delta, max_delta):
+        assert (base_path / f"{delta_number}.xml").is_relative_to(base_path)
         await queue.put(
             Download(
                 base_path / f"{delta_number}.xml", url_template.format(delta_number)

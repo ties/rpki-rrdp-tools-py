@@ -35,7 +35,8 @@ def set_time_from_headers(res: aiohttp.ClientResponse, target_file: Path) -> Non
 async def get_and_check(
     sem: asyncio.Semaphore,
     session: aiohttp.ClientSession,
-    base_file_name: Path,
+    base_dir: Path,
+    file_name: str,
     uri: str,
     sha256: str,
     override_host: Optional[str],
@@ -46,19 +47,26 @@ async def get_and_check(
 
     If a file exists and the hash should be added to the name, do so.
     """
+    assert base_dir.is_dir()
     expected_hash = sha256.lower()
 
-    target_file = base_file_name
     if hash_in_name:
-        target_file = (
-            base_file_name.parent
-            / f"{base_file_name.stem}-{expected_hash}{base_file_name.suffix}"
+        target_file = base_dir / f"{file_name.stem}-{expected_hash}{file_name.suffix}"
+    else:
+        target_file = base_dir / file_name
+
+    # check target_file for path injection
+    if not target_file.is_relative_to(base_dir):
+        raise ValueError(
+            f"Target file {target_file} is not relative to base directory {base_dir}: Potential path traversal."
         )
-        if target_file.exists():
+
+    if target_file.exists():
+        if expected_hash:
+            # If the hash is expected to be in the name, there is no need to check the content.
             LOG.debug("Already have %s as %s", uri, target_file)
             return False
-    else:
-        if target_file.exists():
+        else:
             with target_file.open("rb") as f:
                 cur_hash = hashlib.sha256(f.read()).hexdigest()
                 if cur_hash == expected_hash:
@@ -155,7 +163,8 @@ async def snapshot_rrdp(
                 get_and_check(
                     sem,
                     session,
-                    output_path / file_name,
+                    output_path,
+                    file_name,
                     notification.snapshot.uri,
                     notification.snapshot.hash,
                     override_host=override_host,
@@ -171,7 +180,8 @@ async def snapshot_rrdp(
                 get_and_check(
                     sem,
                     session,
-                    output_path / file_name,
+                    output_path,
+                    file_name,
                     delta.uri,
                     delta.hash,
                     override_host=override_host,
