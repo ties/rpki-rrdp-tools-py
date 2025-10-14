@@ -9,39 +9,34 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.11", "3.12"]
+        python-version: ["3.11", "3.14"]
 
     steps:
-      - uses: actions/checkout@v3
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+      - uses: actions/checkout@v5
+
+      - name: Install uv and set the Python version
+        uses: astral-sh/setup-uv@v6
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install poetry
-        run: pipx install poetry
-      - uses: actions/setup-python@v4
-        with:
-          python-version: ${{ matrix.python-version }}
-          cache: 'poetry'
       - name: install (dev) dependencies
-        run: poetry install --with dev
+        run: uv sync --locked --all-extras --dev
+
       - name: lint (ruff)
         run: |
           # stop the build if there are Python syntax errors or undefined names
-          poetry run ruff --output-format=github --select=E9,F63,F7,F82 --target-version=py312 .
+          uv run ruff --output-format=github --select=E9,F63,F7,F82 --target-version=py312 .
           # default set of ruff rules with GitHub Annotations
-          poetry run ruff --output-format=github --target-version=py312 .
-      - name: lint (flak8, black)
+          uv run ruff --output-format=github --target-version=py312 .
+      - name: lint (black)
         run: |
-          poetry run flake8 rrdp_tools tests
-          poetry run black --check --diff rrdp_tools tests
+          uv run black --check --diff rrdp_tools tests
       - name: test
-        run: poetry run pytest --cov rrdp_tools --cov-report html -qq -o console_output_style=count -p no:sugar tests
+        run: uv run pytest --cov rrdp_tools --cov-report html -qq -o console_output_style=count -p no:sugar tests
       - name: package and test packaging
         run: |
-          poetry build
-          poetry run twine check dist/*
-          poetry run check-manifest
+          uv build
+          uv run twine check dist/*
+          uv run check-manifest
       - name: Save artifacts
         uses: actions/upload-artifact@v3
         with:
