@@ -38,8 +38,7 @@ jobs:
           uv run twine check dist/*
           uv run check-manifest
       - name: Save artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: dist
-          path: |
-            dist
+          path: dist
