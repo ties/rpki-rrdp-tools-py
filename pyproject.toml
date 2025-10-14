@@ -1,8 +1,9 @@
-[tool.poetry]
+[project]
 name = "rrdp-tools"
 version = "0.2.1"
 description = ""
-authors = ["Ties de Kock <ties@tiesdekock.nl>"]
+authors = [{name="Ties de Kock", email="ties@tiesdekock.nl"}]
+requires-python = ">=3.11"
 readme = "README.md"
 packages = [{include = "rrdp_tools"}]
 
@@ -10,7 +11,6 @@ packages = [{include = "rrdp_tools"}]
 rrdp-tools = "rrdp_tools.cli"
 
 [tool.poetry.dependencies]
-python = "^3.11"
 rnc2rng = "^2.6.6"
 lxml = "^4.9.1"
 aiohttp = "^3.9.0b0"
