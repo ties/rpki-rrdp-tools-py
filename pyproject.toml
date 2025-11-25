@@ -66,6 +66,9 @@ line_length = 88
 profile = "black"
 
 [tool.ruff]
+extend-exclude = ["*.ipynb"]
+
+[tool.ruff.lint]
 ignore = ["E501"]
 
 [tool.pytest]
