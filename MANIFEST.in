@@ -1,10 +1,11 @@
+include *.lock
 
 exclude MANIFEST.in
-exclude poetry.lock
 exclude .pre-commit-config.yaml
 exclude .flake8
 exclude .dockerignore
 exclude Dockerfile
+
 
 global-exclude .gitkeep .gitignore .DS_Store
 
@@ -16,3 +17,5 @@ prune misc
 exclude requirements.txt
 exclude rpki-plpython3u.sql
 prune workbooks
+exclude .coverage
+prune htmlcov

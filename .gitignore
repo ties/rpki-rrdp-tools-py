@@ -4,3 +4,5 @@ dist
 .autoenv.zsh
 asn1/
 .DS_Store
+.coverage
+htmlcov/

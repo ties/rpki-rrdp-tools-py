@@ -77,8 +77,9 @@ delta=# select manifest_sia(content) as sia, manifest_aia(content) as aia, visib
 
 # Changelog
 
-## main:
+## main/v0.3.0:
 
+  * Use UV for build
   * Serialise _to_ XML from RRDP datastructures
   * Parse manifest SIA
   * Explicitly include multidict 6.0.5 to install on Fedora 40
