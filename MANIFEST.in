@@ -17,3 +17,5 @@ prune misc
 exclude requirements.txt
 exclude rpki-plpython3u.sql
 prune workbooks
+exclude .coverage
+prune htmlcov
