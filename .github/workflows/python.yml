@@ -40,5 +40,5 @@ jobs:
       - name: Save artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: dist
+          name: dist-python-${{ matrix.python-version }}
           path: dist
