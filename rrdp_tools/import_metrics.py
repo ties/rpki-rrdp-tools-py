@@ -30,7 +30,7 @@ def parse_metrics_file(content: str) -> list[str]:
 @click.option(
     "--parallel-connections",
     type=int,
-    default=4,
+    default=16,
     help="parallel_connections value in generated config",
 )
 @click.option(

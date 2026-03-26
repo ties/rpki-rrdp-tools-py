@@ -23,7 +23,7 @@ async def sync_rrdp(config: SyncConfig) -> None:
     elif config.request_timeout is not None:
         client_timeout = aiohttp.ClientTimeout(total=config.request_timeout)
     else:
-        client_timeout = aiohttp.ClientTimeout(total=300)
+        client_timeout = aiohttp.ClientTimeout(total=60)
 
     async with (
         asyncio.timeout(config.total_timeout),
@@ -53,6 +53,7 @@ async def sync_rrdp(config: SyncConfig) -> None:
                     skip_snapshot=repo.skip_snapshot,
                     include_session=True,
                     include_hash=repo.include_hash,
+                    store_notification=repo.store_notification,
                     limit_deltas=repo.limit_deltas,
                     sem=sem,
                     session=session,

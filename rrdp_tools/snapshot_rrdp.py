@@ -117,6 +117,7 @@ async def snapshot_rrdp(
     threads: int = 4,
     limit_deltas: Optional[int] = None,
     include_hash: bool = False,
+    store_notification: bool = True,
     sem: Optional[asyncio.Semaphore] = None,
     session: Optional[aiohttp.ClientSession] = None,
 ):
@@ -153,10 +154,14 @@ async def snapshot_rrdp(
             output_path = output_path / notification.session_id
             output_path.mkdir(parents=True, exist_ok=True)
 
-        # Document is valid,
-        with (output_path / "notification.xml").open("wb") as f:
+        # Document is valid, store notification
+        if store_notification:
+            notification_file = output_path / f"notification.{notification.serial}.xml"
+        else:
+            notification_file = output_path / "notification.xml"
+        with notification_file.open("wb") as f:
             f.write(await res.read())
-        set_time_from_headers(res, output_path / "notification.xml")
+        set_time_from_headers(res, notification_file)
 
         queue = []
 
@@ -213,6 +218,11 @@ async def snapshot_rrdp(
     "--include-hash/--no-include-hash", help="Include hash in filenames", is_flag=True
 )
 @click.option(
+    "--store-notification/--no-store-notification",
+    help="Store notification.xml with serial in filename",
+    default=True,
+)
+@click.option(
     "--threads", help="Number of download threads", type=int, default=os.cpu_count()
 )
 @click.option(
@@ -229,6 +239,7 @@ def snapshot_rrdp_command(
     limit_deltas: Optional[int] = None,
     create_target: bool = False,
     include_hash: bool = True,
+    store_notification: bool = True,
 ):
     """
     Snapshot RRDP content
@@ -281,6 +292,7 @@ def snapshot_rrdp_command(
             threads=threads,
             limit_deltas=limit_deltas,
             include_hash=include_hash,
+            store_notification=store_notification,
         )
     )
 
