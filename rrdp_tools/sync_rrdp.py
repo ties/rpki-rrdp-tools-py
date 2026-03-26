@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import urllib.parse
 from pathlib import Path
 from typing import Optional
 
@@ -21,7 +22,18 @@ async def sync_rrdp(config: SyncConfig) -> None:
         tasks = []
         repo_names = []
         for repo in config.repositories:
-            output_path = base_dir / repo.effective_name
+            output_path = (base_dir / repo.effective_name).resolve()
+            hostname_dir = (
+                base_dir / urllib.parse.urlparse(repo.notification_url).hostname
+            ).resolve()
+            if not output_path.is_relative_to(hostname_dir):
+                LOG.error(
+                    "Skipping %s: output path %s escapes hostname directory %s",
+                    repo.notification_url,
+                    output_path,
+                    hostname_dir,
+                )
+                continue
             output_path.mkdir(parents=True, exist_ok=True)
             repo_names.append(repo.effective_name)
             tasks.append(
@@ -29,6 +41,7 @@ async def sync_rrdp(config: SyncConfig) -> None:
                     repo.notification_url,
                     output_path,
                     skip_snapshot=repo.skip_snapshot,
+                    include_session=True,
                     include_hash=repo.include_hash,
                     limit_deltas=repo.limit_deltas,
                     sem=sem,
@@ -51,7 +64,12 @@ async def sync_rrdp(config: SyncConfig) -> None:
         raise SystemExit(1)
 
 
-@click.command("sync-rrdp")
+@click.group("sync-rrdp")
+def sync_rrdp_command():
+    """Sync RRDP repositories."""
+
+
+@sync_rrdp_command.command("run")
 @click.argument("config_file", type=click.Path(exists=True, path_type=Path))
 @click.option(
     "--parallel-connections",
@@ -66,7 +84,7 @@ async def sync_rrdp(config: SyncConfig) -> None:
     help="Override base_dir from config",
 )
 @click.option("-v", "--verbose", is_flag=True)
-def sync_rrdp_command(
+def sync_rrdp_run_command(
     config_file: Path,
     parallel_connections: Optional[int],
     base_dir: Optional[Path],
@@ -92,3 +110,11 @@ def sync_rrdp_command(
     )
 
     asyncio.run(sync_rrdp(config))
+
+
+# Register sub-commands
+from .import_metrics import import_rrdp_repos_from_metrics_command  # noqa: E402
+
+sync_rrdp_command.add_command(
+    import_rrdp_repos_from_metrics_command, "import-from-metrics"
+)

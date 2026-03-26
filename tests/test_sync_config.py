@@ -37,6 +37,23 @@ class TestRepositoryConfig:
         )
         assert repo.effective_name == "rrdp.ripe.net"
 
+    def test_effective_name_includes_path(self):
+        repo = RepositoryConfig(
+            notification_url="https://rpki-rrdp.us-east-2.amazonaws.com/rrdp/f703696e-e47b-4c20-bd93-6f80904e42d2/notification.xml",
+        )
+        assert (
+            repo.effective_name
+            == "rpki-rrdp.us-east-2.amazonaws.com/rrdp/f703696e-e47b-4c20-bd93-6f80904e42d2"
+        )
+
+    def test_effective_name_preserves_path_segments(self):
+        """Path traversal protection happens in sync_rrdp, not here."""
+        repo = RepositoryConfig(
+            notification_url="https://evil.com/../../etc/notification.xml",
+        )
+        # effective_name preserves raw path; sync_rrdp checks containment
+        assert repo.effective_name == "evil.com/../../etc"
+
 
 class TestLoadConfig:
     def test_load_valid_config(self, tmp_path):
@@ -48,7 +65,7 @@ class TestLoadConfig:
         assert config.base_dir == "/data/rrdp"
         assert len(config.repositories) == 2
         assert config.repositories[0].name == "ripe"
-        assert config.repositories[1].effective_name == "rpki.example.com"
+        assert config.repositories[1].effective_name == "rpki.example.com/rrdp"
 
     def test_load_missing_base_dir(self, tmp_path):
         config_file = tmp_path / "config.toml"

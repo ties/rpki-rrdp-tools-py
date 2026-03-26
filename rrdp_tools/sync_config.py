@@ -1,7 +1,7 @@
 import tomllib
 import urllib.parse
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 
 @dataclass
@@ -16,7 +16,13 @@ class RepositoryConfig:
     def effective_name(self) -> str:
         if self.name:
             return self.name
-        return urllib.parse.urlparse(self.notification_url).hostname
+        parsed = urllib.parse.urlparse(self.notification_url)
+        # Use hostname + parent path of notification.xml
+        parent = PurePosixPath(parsed.path).parent
+        parts = [p for p in parent.parts if p != "/"]
+        if parts:
+            return str(PurePosixPath(parsed.hostname, *parts))
+        return parsed.hostname
 
 
 @dataclass
@@ -51,7 +57,7 @@ def load_config(path: Path) -> SyncConfig:
         raise ValueError("Config file must contain at least one [[repository]]")
 
     return SyncConfig(
-        base_dir=data["base_dir"],
+        base_dir=str(Path(data["base_dir"]).expanduser()),
         parallel_connections=data.get("parallel_connections", 4),
         repositories=repos,
     )
