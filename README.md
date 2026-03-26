@@ -75,9 +75,9 @@ notification_url = "https://rpki.example.com/rrdp/notification.xml"
 ```
 
 ```
-uv run python -m rrdp_tools.cli sync-rrdp rrdp-config.toml
-uv run python -m rrdp_tools.cli sync-rrdp rrdp-config.toml --parallel-connections 8
-uv run python -m rrdp_tools.cli sync-rrdp rrdp-config.toml --base-dir /tmp/rrdp
+uv run python -m rrdp_tools.cli sync-rrdp run rrdp-config.toml
+uv run python -m rrdp_tools.cli sync-rrdp run rrdp-config.toml --parallel-connections 8
+uv run python -m rrdp_tools.cli sync-rrdp run rrdp-config.toml --base-dir /tmp/rrdp
 ```
 
 Each repository is stored in a subdirectory of `base_dir`, named by the
@@ -85,13 +85,13 @@ Each repository is stored in a subdirectory of `base_dir`, named by the
 
 ## Generate a sync config from rpki-client metrics
 
-`import-rrdp-repos-from-metrics` parses an rpki-client metrics file and
+`sync-rrdp import-from-metrics` parses an rpki-client metrics file and
 generates a TOML config file for use with `sync-rrdp`. It extracts all
 unique `notify=` URLs from the metrics.
 
 ```
-uv run python -m rrdp_tools.cli import-rrdp-repos-from-metrics /var/lib/rpki-client/metrics -o rrdp-config.toml
-uv run python -m rrdp_tools.cli import-rrdp-repos-from-metrics /var/lib/rpki-client/metrics --base-dir /data/rrdp
+uv run python -m rrdp_tools.cli sync-rrdp import-from-metrics /var/lib/rpki-client/metrics -o rrdp-config.toml
+uv run python -m rrdp_tools.cli sync-rrdp import-from-metrics /var/lib/rpki-client/metrics --base-dir /data/rrdp
 ```
 
 # Usage in SQL

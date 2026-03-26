@@ -34,7 +34,8 @@ def set_time_from_headers(res: aiohttp.ClientResponse, target_file: Path) -> Non
 async def get_and_check(
     sem: asyncio.Semaphore,
     session: aiohttp.ClientSession,
-    base_file_name: Path,
+    base_dir: Path,
+    file_name: str,
     uri: str,
     sha256: str,
     override_host: Optional[str],
@@ -47,11 +48,15 @@ async def get_and_check(
     """
     expected_hash = sha256.lower()
 
-    target_file = base_file_name
+    target_file = base_dir / file_name
+    if not target_file.resolve().is_relative_to(base_dir.resolve()):
+        raise ValueError(
+            f"Target file {target_file} is not relative to base directory {base_dir}: Potential path traversal."
+        )
     if hash_in_name:
         target_file = (
-            base_file_name.parent
-            / f"{base_file_name.stem}-{expected_hash}{base_file_name.suffix}"
+            target_file.parent
+            / f"{target_file.stem}-{expected_hash}{target_file.suffix}"
         )
         if target_file.exists():
             LOG.debug("Already have %s as %s", uri, target_file)
@@ -161,7 +166,8 @@ async def snapshot_rrdp(
                 get_and_check(
                     sem,
                     session,
-                    output_path / file_name,
+                    output_path,
+                    file_name,
                     notification.snapshot.uri,
                     notification.snapshot.hash,
                     override_host=override_host,
@@ -177,7 +183,8 @@ async def snapshot_rrdp(
                 get_and_check(
                     sem,
                     session,
-                    output_path / file_name,
+                    output_path,
+                    file_name,
                     delta.uri,
                     delta.hash,
                     override_host=override_host,

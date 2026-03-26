@@ -1,22 +1,28 @@
 import tomllib
 import urllib.parse
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 
 @dataclass
 class RepositoryConfig:
     notification_url: str
     name: str | None = None
-    skip_snapshot: bool = False
-    include_hash: bool = False
+    skip_snapshot: bool = True
+    include_hash: bool = True
     limit_deltas: int | None = None
 
     @property
     def effective_name(self) -> str:
         if self.name:
             return self.name
-        return urllib.parse.urlparse(self.notification_url).hostname
+        parsed = urllib.parse.urlparse(self.notification_url)
+        # Use hostname + parent path of notification.xml
+        parent = PurePosixPath(parsed.path).parent
+        parts = [p for p in parent.parts if p != "/"]
+        if parts:
+            return str(PurePosixPath(parsed.hostname, *parts))
+        return parsed.hostname
 
 
 @dataclass
@@ -41,8 +47,8 @@ def load_config(path: Path) -> SyncConfig:
             RepositoryConfig(
                 notification_url=repo_data["notification_url"],
                 name=repo_data.get("name"),
-                skip_snapshot=repo_data.get("skip_snapshot", False),
-                include_hash=repo_data.get("include_hash", False),
+                skip_snapshot=repo_data.get("skip_snapshot", True),
+                include_hash=repo_data.get("include_hash", True),
                 limit_deltas=repo_data.get("limit_deltas"),
             )
         )
@@ -51,7 +57,7 @@ def load_config(path: Path) -> SyncConfig:
         raise ValueError("Config file must contain at least one [[repository]]")
 
     return SyncConfig(
-        base_dir=data["base_dir"],
+        base_dir=str(Path(data["base_dir"]).expanduser()),
         parallel_connections=data.get("parallel_connections", 4),
         repositories=repos,
     )
@@ -72,10 +78,10 @@ def _format_repo(repo: RepositoryConfig) -> list[str]:
     lines.append(f'notification_url = "{repo.notification_url}"')
     if repo.name:
         lines.append(f'name = "{repo.name}"')
-    if repo.skip_snapshot:
-        lines.append("skip_snapshot = true")
-    if repo.include_hash:
-        lines.append("include_hash = true")
+    if not repo.skip_snapshot:
+        lines.append("skip_snapshot = false")
+    if not repo.include_hash:
+        lines.append("include_hash = false")
     if repo.limit_deltas is not None:
         lines.append(f"limit_deltas = {repo.limit_deltas}")
     return lines
