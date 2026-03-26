@@ -1,0 +1,8 @@
+SHELL=/bin/bash
+IMAGE="ghcr.io/ties/rpki-rrdp-tools-py@sha256:276f378afb8cbcdf142b53d4c8fbcbc0fed7b6f5bfccc26f4bf60866eab57e9f"
+
+# Generate config from rpki-client metrics every hour
+0 * * * * root podman run --rm -v /var/lib/rpki-client/metrics:/metrics:ro -v /data:/data $IMAGE sync-rrdp import-from-metrics --base-dir /data/rrdp/ -o /data/rrdp_sync.toml /metrics 2>&1 | logger -t rrdp-import
+
+# Run rrdp-sync every 5 minutes
+*/5 * * * * root podman run --rm -v /data:/data $IMAGE sync-rrdp run /data/rrdp_sync.toml 2>&1 | logger -t rrdp-sync

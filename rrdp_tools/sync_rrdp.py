@@ -18,7 +18,17 @@ async def sync_rrdp(config: SyncConfig) -> None:
     base_dir = Path(config.base_dir)
     sem = asyncio.Semaphore(config.parallel_connections)
 
-    async with aiohttp.ClientSession() as session:
+    if config.request_timeout == 0:
+        client_timeout = aiohttp.ClientTimeout(total=None)
+    elif config.request_timeout is not None:
+        client_timeout = aiohttp.ClientTimeout(total=config.request_timeout)
+    else:
+        client_timeout = aiohttp.ClientTimeout(total=60)
+
+    async with (
+        asyncio.timeout(config.total_timeout),
+        aiohttp.ClientSession(timeout=client_timeout) as session,
+    ):
         tasks = []
         repo_names = []
         for repo in config.repositories:
@@ -43,6 +53,7 @@ async def sync_rrdp(config: SyncConfig) -> None:
                     skip_snapshot=repo.skip_snapshot,
                     include_session=True,
                     include_hash=repo.include_hash,
+                    store_notification=repo.store_notification,
                     limit_deltas=repo.limit_deltas,
                     sem=sem,
                     session=session,
@@ -84,11 +95,26 @@ def sync_rrdp_command():
     help="Override base_dir from config",
 )
 @click.option("-v", "--verbose", is_flag=True)
+@click.option(
+    "--timeout",
+    "total_timeout",
+    type=int,
+    default=None,
+    help="Total timeout in seconds for the entire sync run",
+)
+@click.option(
+    "--request-timeout",
+    type=int,
+    default=None,
+    help="Per-request timeout in seconds (default: 300, 0 to disable)",
+)
 def sync_rrdp_run_command(
     config_file: Path,
     parallel_connections: Optional[int],
     base_dir: Optional[Path],
     verbose: bool,
+    total_timeout: Optional[int],
+    request_timeout: Optional[int],
 ):
     """Sync all RRDP repositories defined in a TOML config file.
 
@@ -103,13 +129,24 @@ def sync_rrdp_run_command(
         config.parallel_connections = parallel_connections
     if base_dir is not None:
         config.base_dir = str(base_dir)
+    if total_timeout is not None:
+        config.total_timeout = total_timeout
+    if request_timeout is not None:
+        config.request_timeout = request_timeout
 
     click.echo(
         f"Syncing {len(config.repositories)} repositories "
         f"(parallel_connections={config.parallel_connections}, base_dir={config.base_dir})"
     )
 
-    asyncio.run(sync_rrdp(config))
+    try:
+        asyncio.run(sync_rrdp(config))
+    except TimeoutError:
+        click.echo(
+            click.style(f"Sync timed out after {config.total_timeout}s", fg="red"),
+            err=True,
+        )
+        raise SystemExit(1)
 
 
 # Register sub-commands

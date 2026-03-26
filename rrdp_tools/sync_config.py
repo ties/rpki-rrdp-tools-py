@@ -10,6 +10,7 @@ class RepositoryConfig:
     name: str | None = None
     skip_snapshot: bool = True
     include_hash: bool = True
+    store_notification: bool = True
     limit_deltas: int | None = None
 
     @property
@@ -29,7 +30,9 @@ class RepositoryConfig:
 class SyncConfig:
     base_dir: str
     repositories: list[RepositoryConfig] = field(default_factory=list)
-    parallel_connections: int = 4
+    parallel_connections: int = 16
+    request_timeout: int | None = 60
+    total_timeout: int | None = 275
 
 
 def load_config(path: Path) -> SyncConfig:
@@ -49,6 +52,7 @@ def load_config(path: Path) -> SyncConfig:
                 name=repo_data.get("name"),
                 skip_snapshot=repo_data.get("skip_snapshot", True),
                 include_hash=repo_data.get("include_hash", True),
+                store_notification=repo_data.get("store_notification", True),
                 limit_deltas=repo_data.get("limit_deltas"),
             )
         )
@@ -58,7 +62,9 @@ def load_config(path: Path) -> SyncConfig:
 
     return SyncConfig(
         base_dir=str(Path(data["base_dir"]).expanduser()),
-        parallel_connections=data.get("parallel_connections", 4),
+        parallel_connections=data.get("parallel_connections", 16),
+        request_timeout=data.get("request_timeout", 60),
+        total_timeout=data.get("total_timeout", 275),
         repositories=repos,
     )
 
@@ -82,6 +88,8 @@ def _format_repo(repo: RepositoryConfig) -> list[str]:
         lines.append("skip_snapshot = false")
     if not repo.include_hash:
         lines.append("include_hash = false")
+    if not repo.store_notification:
+        lines.append("store_notification = false")
     if repo.limit_deltas is not None:
         lines.append(f"limit_deltas = {repo.limit_deltas}")
     return lines
@@ -91,6 +99,10 @@ def format_toml(config: SyncConfig) -> str:
     lines = []
     lines.append(f"parallel_connections = {config.parallel_connections}")
     lines.append(f'base_dir = "{config.base_dir}"')
+    if config.request_timeout is not None:
+        lines.append(f"request_timeout = {config.request_timeout}")
+    if config.total_timeout is not None:
+        lines.append(f"total_timeout = {config.total_timeout}")
 
     rir_repos = sorted(
         (r for r in config.repositories if _is_rir(r)),
@@ -120,11 +132,15 @@ def format_toml(config: SyncConfig) -> str:
 def config_from_notification_urls(
     urls: list[str],
     base_dir: str = "/data/rrdp",
-    parallel_connections: int = 4,
+    parallel_connections: int = 16,
+    request_timeout: int | None = 60,
+    total_timeout: int | None = 275,
 ) -> SyncConfig:
     repos = [RepositoryConfig(notification_url=url) for url in urls]
     return SyncConfig(
         base_dir=base_dir,
         parallel_connections=parallel_connections,
+        request_timeout=request_timeout,
+        total_timeout=total_timeout,
         repositories=repos,
     )
