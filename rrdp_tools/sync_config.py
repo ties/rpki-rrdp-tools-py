@@ -30,6 +30,8 @@ class SyncConfig:
     base_dir: str
     repositories: list[RepositoryConfig] = field(default_factory=list)
     parallel_connections: int = 4
+    request_timeout: int | None = None
+    total_timeout: int | None = None
 
 
 def load_config(path: Path) -> SyncConfig:
@@ -59,6 +61,8 @@ def load_config(path: Path) -> SyncConfig:
     return SyncConfig(
         base_dir=str(Path(data["base_dir"]).expanduser()),
         parallel_connections=data.get("parallel_connections", 4),
+        request_timeout=data.get("request_timeout"),
+        total_timeout=data.get("total_timeout"),
         repositories=repos,
     )
 
@@ -91,6 +95,10 @@ def format_toml(config: SyncConfig) -> str:
     lines = []
     lines.append(f"parallel_connections = {config.parallel_connections}")
     lines.append(f'base_dir = "{config.base_dir}"')
+    if config.request_timeout is not None:
+        lines.append(f"request_timeout = {config.request_timeout}")
+    if config.total_timeout is not None:
+        lines.append(f"total_timeout = {config.total_timeout}")
 
     rir_repos = sorted(
         (r for r in config.repositories if _is_rir(r)),
