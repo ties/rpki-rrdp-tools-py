@@ -1,0 +1,11 @@
+[Unit]
+Description=Run RRDP sync every 5 minutes
+
+[Timer]
+# Equivalent to cron: */5 * * * *
+OnCalendar=*-*-* *:00/5:00
+# Do not try to catch up missed runs
+Persistent=false
+
+[Install]
+WantedBy=timers.target

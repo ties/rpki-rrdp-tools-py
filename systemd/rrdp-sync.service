@@ -1,0 +1,10 @@
+[Unit]
+Description=Run RRDP sync
+# Wait for any in-progress import to finish before syncing
+After=rrdp-import.service
+
+[Service]
+Type=oneshot
+Environment=IMAGE=ghcr.io/ties/rpki-rrdp-tools-py@sha256:315882ae7cb0c82b84b83e31ef73aa6c8cc3cc5600acf00d8c7daa38ffa50698
+ExecStart=/usr/bin/podman run --rm -v /data:/data ${IMAGE} sync-rrdp run /data/rrdp_sync.toml
+SyslogIdentifier=rrdp-sync
