@@ -33,11 +33,26 @@ def parse_metrics_file(content: str) -> list[str]:
     default=4,
     help="parallel_connections value in generated config",
 )
+@click.option(
+    "--timeout",
+    "total_timeout",
+    type=int,
+    default=None,
+    help="total_timeout value in generated config (seconds)",
+)
+@click.option(
+    "--request-timeout",
+    type=int,
+    default=None,
+    help="request_timeout value in generated config (seconds)",
+)
 def import_rrdp_repos_from_metrics_command(
     metrics_file: Path,
     output: Path | None,
     base_dir: str,
     parallel_connections: int,
+    total_timeout: int | None,
+    request_timeout: int | None,
 ):
     """Generate a sync-rrdp TOML config from rpki-client metrics.
 
@@ -51,7 +66,11 @@ def import_rrdp_repos_from_metrics_command(
         raise SystemExit(1)
 
     config = config_from_notification_urls(
-        urls, base_dir=base_dir, parallel_connections=parallel_connections
+        urls,
+        base_dir=base_dir,
+        parallel_connections=parallel_connections,
+        request_timeout=request_timeout,
+        total_timeout=total_timeout,
     )
     toml_str = format_toml(config)
 

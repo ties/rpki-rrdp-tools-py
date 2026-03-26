@@ -129,10 +129,14 @@ def config_from_notification_urls(
     urls: list[str],
     base_dir: str = "/data/rrdp",
     parallel_connections: int = 4,
+    request_timeout: int | None = None,
+    total_timeout: int | None = None,
 ) -> SyncConfig:
     repos = [RepositoryConfig(notification_url=url) for url in urls]
     return SyncConfig(
         base_dir=base_dir,
         parallel_connections=parallel_connections,
+        request_timeout=request_timeout,
+        total_timeout=total_timeout,
         repositories=repos,
     )
