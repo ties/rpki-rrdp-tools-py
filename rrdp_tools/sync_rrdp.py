@@ -1,0 +1,94 @@
+import asyncio
+import logging
+from pathlib import Path
+from typing import Optional
+
+import aiohttp
+import click
+
+from .snapshot_rrdp import snapshot_rrdp
+from .sync_config import SyncConfig, load_config
+
+LOG = logging.getLogger(__name__)
+
+
+async def sync_rrdp(config: SyncConfig) -> None:
+    """Run snapshot_rrdp for each configured repository."""
+    base_dir = Path(config.base_dir)
+    sem = asyncio.Semaphore(config.parallel_connections)
+
+    async with aiohttp.ClientSession() as session:
+        tasks = []
+        repo_names = []
+        for repo in config.repositories:
+            output_path = base_dir / repo.effective_name
+            output_path.mkdir(parents=True, exist_ok=True)
+            repo_names.append(repo.effective_name)
+            tasks.append(
+                snapshot_rrdp(
+                    repo.notification_url,
+                    output_path,
+                    skip_snapshot=repo.skip_snapshot,
+                    include_hash=repo.include_hash,
+                    limit_deltas=repo.limit_deltas,
+                    sem=sem,
+                    session=session,
+                )
+            )
+
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    failures = 0
+    for name, result in zip(repo_names, results):
+        if isinstance(result, Exception):
+            failures += 1
+            click.echo(click.style(f"FAILED {name}: {result}", fg="red"), err=True)
+
+    click.echo(
+        f"Sync completed: {len(results) - failures}/{len(results)} repositories succeeded."
+    )
+    if failures:
+        raise SystemExit(1)
+
+
+@click.command("sync-rrdp")
+@click.argument("config_file", type=click.Path(exists=True, path_type=Path))
+@click.option(
+    "--parallel-connections",
+    type=int,
+    default=None,
+    help="Override parallel_connections from config",
+)
+@click.option(
+    "--base-dir",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Override base_dir from config",
+)
+@click.option("-v", "--verbose", is_flag=True)
+def sync_rrdp_command(
+    config_file: Path,
+    parallel_connections: Optional[int],
+    base_dir: Optional[Path],
+    verbose: bool,
+):
+    """Sync all RRDP repositories defined in a TOML config file.
+
+    CONFIG_FILE    Path to TOML config file.
+    """
+    if verbose:
+        logging.basicConfig(level=logging.DEBUG)
+
+    config = load_config(config_file)
+
+    if parallel_connections is not None:
+        config.parallel_connections = parallel_connections
+    if base_dir is not None:
+        config.base_dir = str(base_dir)
+
+    click.echo(
+        f"Syncing {len(config.repositories)} repositories "
+        f"(parallel_connections={config.parallel_connections}, base_dir={config.base_dir})"
+    )
+
+    asyncio.run(sync_rrdp(config))

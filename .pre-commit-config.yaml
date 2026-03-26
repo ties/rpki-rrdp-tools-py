@@ -10,20 +10,20 @@ repos:
       - id: check-yaml
       - id: check-added-large-files
   - repo: https://github.com/pycqa/isort
-    rev: 7.0.0
+    rev: 8.0.1
     hooks:
       - id: isort
         name: isort (python)
         additional_dependencies: [toml]
   - repo: https://github.com/astral-sh/uv-pre-commit
     # uv version.
-    rev: 0.9.11
+    rev: 0.11.1
     hooks:
       # Update the uv lockfile
       - id: uv-lock
   - repo: https://github.com/astral-sh/ruff-pre-commit
     # Ruff version.
-    rev: v0.14.6
+    rev: v0.15.7
     hooks:
       # Run the linter.
       - id: ruff-check
