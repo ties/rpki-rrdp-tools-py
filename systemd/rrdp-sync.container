@@ -1,0 +1,12 @@
+[Unit]
+Description=Run RRDP sync
+After=rrdp-import.service
+
+[Container]
+Image=rrdp-tools.image
+Exec=sync-rrdp run /data/rrdp_sync.toml
+Volume=/data:/data
+
+[Service]
+Type=oneshot
+SyslogIdentifier=rrdp-sync

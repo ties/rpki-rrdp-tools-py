@@ -1,0 +1,14 @@
+[Unit]
+Description=Import rpki-client metrics and generate RRDP sync config
+Before=rrdp-sync.service
+Conflicts=rrdp-sync.service
+
+[Container]
+Image=rrdp-tools.image
+Exec=sync-rrdp import-from-metrics --base-dir /data/rrdp/ -o /data/rrdp_sync.toml /metrics
+Volume=/var/lib/rpki-client/metrics:/metrics:ro
+Volume=/data:/data
+
+[Service]
+Type=oneshot
+SyslogIdentifier=rrdp-import
