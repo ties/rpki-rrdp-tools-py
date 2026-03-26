@@ -41,4 +41,4 @@ ENV PATH="/app/.venv/bin:$PATH"
 USER nonroot
 WORKDIR /app
 
-ENTRYPOINT ["python", "-m", "rrdp_tool.snapshot_rrdp", "-v"]
+ENTRYPOINT ["python", "-m", "rrdp_tools.cli"]
