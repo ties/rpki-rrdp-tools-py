@@ -72,7 +72,7 @@ async def sync_rrdp(config: SyncConfig) -> None:
         f"Sync completed: {len(results) - failures}/{len(results)} repositories succeeded."
     )
     if failures:
-        raise SystemExit(1)
+        LOG.warning("%d/%d repositories failed", failures, len(results))
 
 
 @click.group("sync-rrdp")
