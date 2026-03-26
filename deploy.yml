@@ -46,6 +46,18 @@
         - rrdp-sync.timer
       notify: Reload systemd daemon
 
+    - name: Flush handlers to ensure daemon reload has run
+      ansible.builtin.meta: flush_handlers
+
+    - name: Enable and start timers
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        enabled: true
+        state: started
+      loop:
+        - rrdp-import.timer
+        - rrdp-sync.timer
+
   handlers:
     - name: Reload systemd daemon
       ansible.builtin.systemd:
