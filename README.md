@@ -94,6 +94,19 @@ uv run python -m rrdp_tools.cli sync-rrdp import-from-metrics /var/lib/rpki-clie
 uv run python -m rrdp_tools.cli sync-rrdp import-from-metrics /var/lib/rpki-client/metrics --base-dir /data/rrdp
 ```
 
+### Run with systemd
+
+  * Copy the quadlet files from `systemd` to `/etc/containers/systemd/`.
+
+```
+# Move the files to the correct location
+mkdir -p /etc/containers/systemd/
+cp systemd/*.container systemd/*.image systemd/*.timer /etc/containers/systemd/
+systemctl daemon-reload
+```
+
+This should produce `rrdp-import.service`/`rrdp-sync.service`.
+
 # Usage in SQL
 
 This library can also be used in PostgreSQL if you install the library into the
