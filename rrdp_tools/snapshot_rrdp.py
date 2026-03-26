@@ -155,12 +155,22 @@ async def snapshot_rrdp(
             output_path.mkdir(parents=True, exist_ok=True)
 
         # Document is valid, store notification
+        notification_content = await res.read()
         if store_notification:
-            notification_file = output_path / f"notification.{notification.serial}.xml"
+            if include_hash:
+                notification_hash = hashlib.sha256(notification_content).hexdigest()
+                notification_file = (
+                    output_path
+                    / f"notification.{notification.serial}.{notification_hash}.xml"
+                )
+            else:
+                notification_file = (
+                    output_path / f"notification.{notification.serial}.xml"
+                )
         else:
             notification_file = output_path / "notification.xml"
         with notification_file.open("wb") as f:
-            f.write(await res.read())
+            f.write(notification_content)
         set_time_from_headers(res, notification_file)
 
         queue = []
