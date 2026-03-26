@@ -55,10 +55,15 @@ INFO:__main__:Skipping /Users/kockt/Desktop/tmp/notification.xml: not a snapshot
 ...
 ```
 
-## Sync multiple RRDP repositories from a config file
+# Sync multiple RRDP repositories from a config file
 
 `sync-rrdp` reads a TOML config file and runs `snapshot-rrdp` for each
 configured repository, sharing a connection pool and parallelism limit.
+
+This is the best way to mirror a set of repositories that you are
+interested in.
+
+By default the directory used is the hostname, filenames contain the hash (`delta`)
 
 ```toml
 # rrdp-config.toml
@@ -72,6 +77,13 @@ name = "ripe"
 [[repository]]
 notification_url = "https://rpki.example.com/rrdp/notification.xml"
 # name defaults to hostname: "rpki.example.com"
+# name = "rpki.example.com"
+# skip downloading the snapshot? default=true/do not download
+skip_snapshot = false
+# should the hash of the file be in the name of notification/delta xml files?
+include_hash = false
+# should the notification file for every serial be saved?
+store_notification = false
 ```
 
 ```
@@ -94,10 +106,17 @@ uv run python -m rrdp_tools.cli sync-rrdp import-from-metrics /var/lib/rpki-clie
 uv run python -m rrdp_tools.cli sync-rrdp import-from-metrics /var/lib/rpki-client/metrics --base-dir /data/rrdp
 ```
 
-### Run with systemd
+### Run with podman and systemd
+
+You can run the RRDP sync process using [podman quadlets](https://docs.podman.io/en/latest/markdown/podman-systemd.unit.5.html).
+This starts the container and removes it immediately after running. This means
+you do not need to setup a (modern) python development environment to run this
+tool.
+
+To run it:
 
   * Copy the quadlet files from `systemd` to `/etc/containers/systemd/`.
-
+  *
 ```
 # Move the files to the correct location
 mkdir -p /etc/containers/systemd/
@@ -105,7 +124,10 @@ cp systemd/*.container systemd/*.image systemd/*.timer /etc/containers/systemd/
 systemctl daemon-reload
 ```
 
-This should produce `rrdp-import.service`/`rrdp-sync.service`.
+This should produce `rrdp-import.service`/`rrdp-sync.service`. The systemd timer
+makes sure that the containers are created (and removed after they run) periodically.
+
+The services are one-shot services that remove the container after it exits.
 
 # Usage in SQL
 

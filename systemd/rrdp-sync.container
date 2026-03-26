@@ -6,7 +6,13 @@ After=rrdp-import.service
 Image=rrdp-tools.image
 Exec=sync-rrdp run /data/rrdp_sync.toml
 Volume=/data:/data
+ReadOnly=true
+DropCapability=ALL
 
 [Service]
 Type=oneshot
+# When a repository is not working, the tool exits with a non-zero exit code.
+# Restart=on-failure to make systemd reactivate the unit.
+Restart=on-failure
 SyslogIdentifier=rrdp-sync
+NoNewPrivileges=true
