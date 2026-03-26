@@ -3,7 +3,7 @@ Description=Generate RRDP sync config from rpki-client metrics every hour
 
 [Timer]
 # Equivalent to cron: 0 * * * *
-OnCalendar=*-*-* *:00:00
+OnCalendar=*-*-* *:03:00
 # Do not try to catch up missed runs
 Persistent=false
 
