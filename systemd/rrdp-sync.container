@@ -4,7 +4,7 @@ After=rrdp-import.service
 
 [Container]
 Image=rrdp-tools.image
-Exec=sync-rrdp run /data/rrdp_sync.toml
+Exec=sync-rrdp run /data/rrdp_sync.toml --parallel-connections 64
 Volume=/data:/data
 ReadOnly=true
 DropCapability=ALL
