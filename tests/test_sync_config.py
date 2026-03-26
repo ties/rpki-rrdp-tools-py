@@ -194,8 +194,8 @@ class TestFormatToml:
             repositories=[
                 RepositoryConfig(
                     notification_url="https://x.com/n.xml",
-                    skip_snapshot=True,
-                    include_hash=True,
+                    skip_snapshot=False,
+                    include_hash=False,
                     limit_deltas=10,
                 ),
             ],
@@ -205,8 +205,8 @@ class TestFormatToml:
         parsed = tomllib.loads(toml_str)
 
         repo = parsed["repository"][0]
-        assert repo["skip_snapshot"] is True
-        assert repo["include_hash"] is True
+        assert repo["skip_snapshot"] is False
+        assert repo["include_hash"] is False
         assert repo["limit_deltas"] == 10
 
 
