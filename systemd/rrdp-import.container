@@ -11,6 +11,11 @@ Volume=/data:/data
 Network=none
 ReadOnly=true
 DropCapability=ALL
+# Map container root to host root, container 999 (nonroot) to host 65534 (nobody)
+UIDMap=0:0:999
+UIDMap=999:65534:1
+GIDMap=0:0:999
+GIDMap=999:65534:1
 
 [Service]
 Type=oneshot
