@@ -8,7 +8,7 @@ from pathlib import Path, PurePosixPath
 class RepositoryConfig:
     notification_url: str
     name: str | None = None
-    skip_snapshot: bool = False
+    skip_snapshot: bool = True
     include_hash: bool = False
     limit_deltas: int | None = None
 
@@ -47,7 +47,7 @@ def load_config(path: Path) -> SyncConfig:
             RepositoryConfig(
                 notification_url=repo_data["notification_url"],
                 name=repo_data.get("name"),
-                skip_snapshot=repo_data.get("skip_snapshot", False),
+                skip_snapshot=repo_data.get("skip_snapshot", True),
                 include_hash=repo_data.get("include_hash", False),
                 limit_deltas=repo_data.get("limit_deltas"),
             )
@@ -78,8 +78,8 @@ def _format_repo(repo: RepositoryConfig) -> list[str]:
     lines.append(f'notification_url = "{repo.notification_url}"')
     if repo.name:
         lines.append(f'name = "{repo.name}"')
-    if repo.skip_snapshot:
-        lines.append("skip_snapshot = true")
+    if not repo.skip_snapshot:
+        lines.append("skip_snapshot = false")
     if repo.include_hash:
         lines.append("include_hash = true")
     if repo.limit_deltas is not None:
