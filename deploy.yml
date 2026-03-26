@@ -1,0 +1,52 @@
+---
+- name: Deploy rrdp-tools with Quadlet
+  hosts: all
+  become: true
+  vars:
+    image_name: ghcr.io/ties/rpki-rrdp-tools-py
+    image_tag: latest
+    systemd_quadlet_path: /etc/containers/systemd
+
+  tasks:
+    - name: Ensure /etc/containers/systemd directory exists
+      ansible.builtin.file:
+        path: "{{ systemd_quadlet_path }}"
+        state: directory
+        mode: '0755'
+
+    - name: Pull latest image
+      containers.podman.podman_image:
+        name: "{{ image_name }}:{{ image_tag }}"
+        force: true
+      register: image_info
+
+    - name: Extract image digest
+      ansible.builtin.set_fact:
+        # podman_image returns 'Digest' within the first element of the 'image' list
+        image_digest: "{{ image_info.image[0].Digest }}"
+
+    - name: Deploy rrdp-tools image definition
+      ansible.builtin.copy:
+        dest: "{{ systemd_quadlet_path }}/rrdp-tools.image"
+        content: |
+          [Image]
+          Image={{ image_name }}@{{ image_digest }}
+        mode: '0644'
+      notify: Reload systemd daemon
+
+    - name: Deploy systemd Quadlet unit files
+      ansible.builtin.copy:
+        src: "systemd/{{ item }}"
+        dest: "{{ systemd_quadlet_path }}/{{ item }}"
+        mode: '0644'
+      loop:
+        - rrdp-import.container
+        - rrdp-import.timer
+        - rrdp-sync.container
+        - rrdp-sync.timer
+      notify: Reload systemd daemon
+
+  handlers:
+    - name: Reload systemd daemon
+      ansible.builtin.systemd:
+        daemon_reload: true

@@ -116,12 +116,20 @@ tool.
 To run it:
 
   * Copy the quadlet files from `systemd` to `/etc/containers/systemd/`.
-  *
+  * Update the image hash in `rrdp-tools.image` to the latest hash, or use
+    `:latest`.
+  * Move the files to the correct location and reload systemd so they are
+    loaded:
 ```
-# Move the files to the correct location
 mkdir -p /etc/containers/systemd/
 cp systemd/*.container systemd/*.image systemd/*.timer /etc/containers/systemd/
 systemctl daemon-reload
+```
+
+Or use ansible:
+```
+# in-line inventory, trailing comma is required
+ansible-playbook -i [fqdn], deploy.yml
 ```
 
 This should produce `rrdp-import.service`/`rrdp-sync.service`. The systemd timer
