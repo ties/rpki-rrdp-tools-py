@@ -3,7 +3,6 @@ import email.utils
 import hashlib
 import logging
 import os
-import sys
 import time
 import urllib.parse
 from pathlib import Path
@@ -113,15 +112,21 @@ async def snapshot_rrdp(
     threads: int = 4,
     limit_deltas: Optional[int] = None,
     include_hash: bool = False,
+    sem: Optional[asyncio.Semaphore] = None,
+    session: Optional[aiohttp.ClientSession] = None,
 ):
     """Snapshot RRDP content."""
-    sem = asyncio.Semaphore(threads)
-
-    async with aiohttp.ClientSession() as session:
+    sem = sem or asyncio.Semaphore(threads)
+    owns_session = session is None
+    if owns_session:
+        session = aiohttp.ClientSession()
+    try:
         LOG.debug("GET %s", notification_url)
         res = await session.get(notification_url)
         if res.status != 200:
-            click.echo(f"HTTP {res.status} from RRDP server, aborting")
+            click.echo(
+                f"HTTP {res.status} from RRDP server for {notification_url}, aborting"
+            )
             click.echo(f"reason: {await res.text()}")
             return
 
@@ -135,8 +140,9 @@ async def snapshot_rrdp(
         )
 
         if not notification.session_id:
-            print("No session_id in notification file!")
-            sys.exit(1)
+            raise ValueError(
+                f"No session_id in notification file for {notification_url}"
+            )
 
         if include_session:
             output_path = output_path / notification.session_id
@@ -181,8 +187,11 @@ async def snapshot_rrdp(
 
         status_per_file = await asyncio.gather(*queue)
         click.echo(
-            f"Update completed. {len(queue)} files are present. Downloaded {sum(status_per_file)} files."
+            f"{notification_url}: {len(queue)} files are present. Downloaded {sum(status_per_file)} files."
         )
+    finally:
+        if owns_session:
+            await session.close()
 
 
 @click.command("snapshot-rrdp")

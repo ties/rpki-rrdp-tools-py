@@ -4,7 +4,7 @@ A number of RRDP utilities in Python.
 
 ## Download the full state of a RRDP repository:
 ```
-poetry run python -m rrdp_tools.cli snapshot-rrdp \
+uv run python -m rrdp_tools.cli snapshot-rrdp \
     https://rrdp.arin.net/notification.xml \
     [output_dir] \
     --include-session \ # optional: include session in output path
@@ -15,7 +15,7 @@ poetry run python -m rrdp_tools.cli snapshot-rrdp \
 ## Reconstruct the files present in a delta.xml or snapshot.xml:
 
 ```
-poetry run python -m rrdp_tools.cli reconstruct-repo \
+uv run python -m rrdp_tools.cli reconstruct-repo \
   [path-to]/snapshot.xml \
   [output_dir] \
   # optional: If file only needs to be semantically validated
@@ -27,7 +27,7 @@ poetry run python -m rrdp_tools.cli reconstruct-repo \
 
 This supports both manifests and certificates
 ```
-$ poetry run python -m rrdp_tools.cli filter-rrdp-content ~/Desktop/tmp  --file-match ".*KpSo3.*\.mft"
+$ uv run python -m rrdp_tools.cli filter-rrdp-content ~/Desktop/tmp  --file-match ".*KpSo3.*\.mft"
 INFO:__main__:found 156 files
 INFO:__main__:Skipping ~/Desktop/tmp/notification.xml: not a snapshot or delta document
  33987 rsync://rpki.ripe.net/repository/DEFAULT/KpSo3VVK5wEHIJnHC2QHVV3d5mk.mft a596a776b24882a90696119f39498a6ee46c65429d5af697f01e3fd2fa686a9e 27228 2023-12-19 23:41:06
@@ -39,7 +39,7 @@ INFO:__main__:Skipping ~/Desktop/tmp/notification.xml: not a snapshot or delta d
 
 This can also print what files were added/deleted between successive manifests:
 ```
-$ poetry run python -m rrdp_tools.rrdp_content_filter ~/Desktop/tmp  --file-match ".*KpSo3.*\.mft" --manifest-diff
+$ uv run python -m rrdp_tools.cli filter-rrdp-content ~/Desktop/tmp  --file-match ".*KpSo3.*\.mft" --manifest-diff
 INFO:__main__:found 156 files
 INFO:__main__:Skipping /Users/kockt/Desktop/tmp/notification.xml: not a snapshot or delta document
  33987 rsync://rpki.ripe.net/repository/DEFAULT/KpSo3VVK5wEHIJnHC2QHVV3d5mk.mft a596a776b24882a90696119f39498a6ee46c65429d5af697f01e3fd2fa686a9e 27228 2023-12-19 23:41:06
@@ -53,6 +53,45 @@ INFO:__main__:Skipping /Users/kockt/Desktop/tmp/notification.xml: not a snapshot
       + P3lU2IwK4_Y5hpe_38GVanU-g9g.cer sha256=1108e9ca3a85e06788a79260620fd32865964ea97f841c4776b011c72faee6fc
       - P3lU2IwK4_Y5hpe_38GVanU-g9g.cer sha256=b484c44560a8ce837819c7f9cf83da011d2e0098cc9462bb9809a1ac495c9623
 ...
+```
+
+## Sync multiple RRDP repositories from a config file
+
+`sync-rrdp` reads a TOML config file and runs `snapshot-rrdp` for each
+configured repository, sharing a connection pool and parallelism limit.
+
+```toml
+# rrdp-config.toml
+parallel_connections = 4
+base_dir = "/data/rrdp"
+
+[[repository]]
+notification_url = "https://rrdp.ripe.net/notification.xml"
+name = "ripe"
+
+[[repository]]
+notification_url = "https://rpki.example.com/rrdp/notification.xml"
+# name defaults to hostname: "rpki.example.com"
+```
+
+```
+uv run python -m rrdp_tools.cli sync-rrdp rrdp-config.toml
+uv run python -m rrdp_tools.cli sync-rrdp rrdp-config.toml --parallel-connections 8
+uv run python -m rrdp_tools.cli sync-rrdp rrdp-config.toml --base-dir /tmp/rrdp
+```
+
+Each repository is stored in a subdirectory of `base_dir`, named by the
+`name` field (or the hostname from the notification URL if not set).
+
+## Generate a sync config from rpki-client metrics
+
+`import-rrdp-repos-from-metrics` parses an rpki-client metrics file and
+generates a TOML config file for use with `sync-rrdp`. It extracts all
+unique `notify=` URLs from the metrics.
+
+```
+uv run python -m rrdp_tools.cli import-rrdp-repos-from-metrics /var/lib/rpki-client/metrics -o rrdp-config.toml
+uv run python -m rrdp_tools.cli import-rrdp-repos-from-metrics /var/lib/rpki-client/metrics --base-dir /data/rrdp
 ```
 
 # Usage in SQL
