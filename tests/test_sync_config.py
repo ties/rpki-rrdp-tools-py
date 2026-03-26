@@ -97,7 +97,7 @@ class TestLoadConfig:
         )
 
         config = load_config(config_file)
-        assert config.parallel_connections == 4
+        assert config.parallel_connections == 16
 
 
 class TestFormatToml:
@@ -219,6 +219,6 @@ class TestConfigFromUrls:
         config = config_from_notification_urls(urls, base_dir="/tmp/rrdp")
 
         assert config.base_dir == "/tmp/rrdp"
-        assert config.parallel_connections == 4
+        assert config.parallel_connections == 16
         assert len(config.repositories) == 2
         assert config.repositories[0].notification_url == urls[0]
