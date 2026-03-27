@@ -1,7 +1,5 @@
 [Unit]
 Description=Import rpki-client metrics and generate RRDP sync config
-Before=rrdp-sync.service
-Conflicts=rrdp-sync.service
 
 [Container]
 Image=rrdp-tools.image
