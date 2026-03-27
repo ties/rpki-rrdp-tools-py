@@ -2,8 +2,9 @@
 Description=Run RRDP sync every 5 minutes
 
 [Timer]
-# Equivalent to cron: */5 * * * *
-OnCalendar=*-*-* *:07/5:00
+OnBootSec=2min
+OnUnitInactiveSec=30sec
+
 # Do not try to catch up missed runs
 Persistent=false
 
