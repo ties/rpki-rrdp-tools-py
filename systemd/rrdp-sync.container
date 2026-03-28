@@ -3,6 +3,7 @@ Description=Run RRDP sync
 
 [Container]
 Image=rrdp-tools.image
+LogDriver=passthrough
 Exec=sync-rrdp run /data/rrdp_sync.toml --parallel-connections 64
 Volume=/data:/data
 ReadOnly=true
