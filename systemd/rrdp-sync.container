@@ -21,3 +21,5 @@ Type=oneshot
 Restart=on-failure
 SyslogIdentifier=rrdp-sync
 NoNewPrivileges=true
+
+ExecStopPost=/bin/sh -c '/usr/bin/journalctl -u rrdp-sync.service --invocation 0 >> /data/logs/$$(date +%%Y%%m%%d).log'
