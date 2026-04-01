@@ -2,6 +2,7 @@
 - name: Deploy rrdp-tools with Quadlet
   hosts: all
   become: true
+  diff: true
   vars:
     image_name: ghcr.io/ties/rpki-rrdp-tools-py
     image_tag: latest
