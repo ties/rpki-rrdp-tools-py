@@ -22,4 +22,4 @@ Restart=on-failure
 SyslogIdentifier=rrdp-sync
 NoNewPrivileges=true
 
-ExecStopPost=/bin/sh -c '/usr/bin/journalctl -u rrdp-sync.service --invocation 0 >> /data/logs/$$(date +%%Y%%m%%d).log'
+ExecStopPost=/bin/sh -c 'mkdir -p /data/$$(date +%%Y/%%m); /usr/bin/journalctl -u rrdp-sync.service --invocation 0 >> /data/$$(date +%%Y/%%m/%%Y%%m%%d).log'
