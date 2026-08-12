@@ -3,6 +3,7 @@
 ## v0.4.1:
   * BSD 3-clause license
   * dependency updates
+  * remove old pinned transitive dependencies
 
 ## v0.3.0:
 
