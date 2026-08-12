@@ -1,5 +1,5 @@
 version = 1
-revision = 4
+revision = 3
 requires-python = ">=3.11"
 resolution-markers = [
     "python_full_version >= '3.14'",
@@ -2739,6 +2739,32 @@ dev = [
     { name = "ruff" },
     { name = "tabulate" },
     { name = "twine" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "aiohttp", specifier = ">=3.14.3" },
+    { name = "alive-progress", specifier = ">=3.3.0" },
+    { name = "asn1crypto", specifier = ">=1.5.1" },
+    { name = "asn1tools", specifier = ">=0.167.0" },
+    { name = "click", specifier = ">=8.4.2" },
+    { name = "lxml", specifier = ">=6.0.2" },
+    { name = "rnc2rng", specifier = ">=2.6.6" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "check-manifest", specifier = ">=0.51" },
+    { name = "flake8", specifier = ">=6.1.0" },
+    { name = "jupyterlab", specifier = ">=4.0.0" },
+    { name = "pandas", specifier = ">=2.0.1" },
+    { name = "pytest", specifier = ">=7.4.2" },
+    { name = "pytest-asyncio", specifier = ">=0.21.1" },
+    { name = "pytest-cov", specifier = ">=4.1.0" },
+    { name = "pytest-xdist", specifier = ">=3.3.1" },
+    { name = "ruff", specifier = ">=0.14" },
+    { name = "tabulate", specifier = ">=0.9.0" },
+    { name = "twine", specifier = ">=7.0.0" },
 ]
 
 [[package]]
