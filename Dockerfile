@@ -1,5 +1,5 @@
 # Based on https://github.com/astral-sh/uv-docker-example/blob/main/multistage.Dockerfile
-FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim AS builder
+FROM ghcr.io/astral-sh/uv:python3.14-trixie-slim AS builder
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
 
 # Disable Python downloads, because we want to use the system interpreter
@@ -23,7 +23,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 #
 # Final image
 #
-FROM python:3.14-slim-bookworm
+FROM python:3.14-slim-trixie
 
 RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
     --mount=target=/var/cache/apt,type=cache,sharing=locked \

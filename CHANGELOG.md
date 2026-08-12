@@ -4,6 +4,7 @@
   * BSD 3-clause license
   * dependency updates
   * remove old pinned transitive dependencies
+  * container based on Debian trixie
 
 ## v0.3.0:
 
