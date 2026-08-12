@@ -6,3 +6,4 @@ asn1/
 .DS_Store
 .coverage
 htmlcov/
+.venv
