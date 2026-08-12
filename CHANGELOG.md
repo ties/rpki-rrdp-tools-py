@@ -5,6 +5,7 @@
   * dependency updates
   * remove old pinned transitive dependencies
   * container based on Debian trixie
+  * Clean up dev dependencies, and use prek instead of pre-commit.
 
 ## v0.3.0:
 
