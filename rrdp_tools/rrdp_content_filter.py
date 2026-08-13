@@ -6,13 +6,12 @@ import itertools
 import logging
 import multiprocessing
 import re
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from dataclasses import dataclass
 from pathlib import Path
 
 import asn1crypto
 import click
-from alive_progress import alive_bar
 
 from rrdp_tools.rpki import FileAndHash, parse_file_time, parse_manifest
 from rrdp_tools.rrdp import (
@@ -68,7 +67,7 @@ def process_file(
     xml_file: Path,
     file_match: re.Pattern,
     log_content: bool = False,
-    progress_bar: alive_bar | None = None,
+    progress_bar: Callable[[], None] | None = None,
 ) -> Generator[ManifestMatch | PublishMatch, None, None]:
     LOG.debug("processing %s", xml_file)
 
