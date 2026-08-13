@@ -5,8 +5,10 @@ https://tools.ietf.org/html/rfc8182
 import base64
 import hashlib
 import logging
+import typing
+from collections.abc import Generator, Sequence
 from dataclasses import dataclass
-from typing import Generator, List, Optional, TextIO, Union
+from typing import TextIO
 from xml.etree import ElementTree as ET
 
 from lxml import etree
@@ -108,9 +110,9 @@ def validate(doc) -> None:
 @dataclass(unsafe_hash=True)
 class PublishElement:
     uri: str
-    previous_hash: Optional[str]
+    previous_hash: str | None
     content: bytes
-    h_content: Union[str, None] = None
+    h_content: str | None = None
 
     def __post_init__(self) -> None:
         self.h_content = hashlib.sha256(self.content).hexdigest()
@@ -140,7 +142,7 @@ class WithdrawElement:
         ET.SubElement(parent, "{http://www.ripe.net/rpki/rrdp}withdraw", attribs)
 
 
-RrdpElement = Union[PublishElement, WithdrawElement]
+RrdpElement = PublishElement | WithdrawElement
 
 
 @dataclass
@@ -157,7 +159,7 @@ class SnapshotElement:
 class DeltaDocument:
     serial: int
     session_id: str
-    content: List[RrdpElement]
+    content: list[RrdpElement]
 
     def to_xml(self) -> ET.Element:
         attribs = {
@@ -178,7 +180,7 @@ class DeltaDocument:
 class SnapshotDocument:
     serial: int
     session_id: str
-    content: List[PublishElement]
+    content: Sequence[PublishElement]
 
     def to_xml(self) -> ET.Element:
         attribs = {
@@ -234,7 +236,7 @@ class NotificationDocument:
         return ET.tostring(self.to_xml(), default_namespace=NS_RRDP).decode("utf-8")
 
 
-def parse_notification_file(notificiation_file: TextIO) -> NotificationDocument:
+def parse_notification_file(notificiation_file: str) -> NotificationDocument:
     huge_parser = etree.XMLParser(encoding="utf-8", recover=False, huge_tree=True)
     doc = etree.fromstring(notificiation_file, parser=huge_parser)
     validate(doc)
@@ -286,7 +288,9 @@ def parse_snapshot_or_delta(
         return SnapshotDocument(
             serial=int(serial),
             session_id=session_id,
-            content=list(parse_publish_withdraw(root)),
+            content=list(
+                typing.cast(list[PublishElement], parse_publish_withdraw(root))
+            ),
         )
     elif root.tag == "{http://www.ripe.net/rpki/rrdp}delta":
         return DeltaDocument(
@@ -294,6 +298,8 @@ def parse_snapshot_or_delta(
             session_id=session_id,
             content=list(parse_publish_withdraw(root)),
         )
+    else:
+        raise ValueError(f"Illegal XML root tag: {root.tag}")
 
 
 def parse_publish_withdraw(root: etree.Element) -> Generator[RrdpElement, None, None]:

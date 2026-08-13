@@ -23,9 +23,9 @@ async def test_reconstruct(tmp_path: pathlib.Path) -> None:
 
     session_dir = tmp_path / files[0]
 
-    notification_files = set(p.name for p in session_dir.glob("*.xml"))
+    notification_files = {p.name for p in session_dir.glob("*.xml")}
 
-    assert any(map(lambda x: "snapshot" in x, notification_files))
+    assert any("snapshot" in x for x in notification_files)
     deltas = list(filter(DELTA_RE.match, notification_files))
 
     # assume there are 5 deltas

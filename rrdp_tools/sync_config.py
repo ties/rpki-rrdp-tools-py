@@ -33,6 +33,7 @@ class SyncConfig:
     parallel_connections: int = 16
     request_timeout: int | None = 60
     total_timeout: int | None = 275
+    user_agent: str | None = None
 
 
 def load_config(path: Path) -> SyncConfig:
@@ -65,6 +66,7 @@ def load_config(path: Path) -> SyncConfig:
         parallel_connections=data.get("parallel_connections", 16),
         request_timeout=data.get("request_timeout", 60),
         total_timeout=data.get("total_timeout", 275),
+        user_agent=data.get("user_agent"),
         repositories=repos,
     )
 
@@ -103,6 +105,8 @@ def format_toml(config: SyncConfig) -> str:
         lines.append(f"request_timeout = {config.request_timeout}")
     if config.total_timeout is not None:
         lines.append(f"total_timeout = {config.total_timeout}")
+    if config.user_agent is not None:
+        lines.append(f'user_agent = "{config.user_agent}"')
 
     rir_repos = sorted(
         (r for r in config.repositories if _is_rir(r)),
@@ -135,6 +139,7 @@ def config_from_notification_urls(
     parallel_connections: int = 16,
     request_timeout: int | None = 60,
     total_timeout: int | None = 275,
+    user_agent: str | None = None,
 ) -> SyncConfig:
     repos = [RepositoryConfig(notification_url=url) for url in urls]
     return SyncConfig(
@@ -142,5 +147,6 @@ def config_from_notification_urls(
         parallel_connections=parallel_connections,
         request_timeout=request_timeout,
         total_timeout=total_timeout,
+        user_agent=user_agent,
         repositories=repos,
     )

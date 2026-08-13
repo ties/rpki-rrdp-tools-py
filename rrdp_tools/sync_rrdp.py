@@ -2,11 +2,11 @@ import asyncio
 import logging
 import urllib.parse
 from pathlib import Path
-from typing import Optional
 
-import aiohttp
 import click
 
+from .http_client import client_session
+from .import_metrics import import_rrdp_repos_from_metrics_command
 from .snapshot_rrdp import snapshot_rrdp
 from .sync_config import SyncConfig, load_config
 
@@ -18,16 +18,9 @@ async def sync_rrdp(config: SyncConfig) -> None:
     base_dir = Path(config.base_dir)
     sem = asyncio.Semaphore(config.parallel_connections)
 
-    if config.request_timeout == 0:
-        client_timeout = aiohttp.ClientTimeout(total=None)
-    elif config.request_timeout is not None:
-        client_timeout = aiohttp.ClientTimeout(total=config.request_timeout)
-    else:
-        client_timeout = aiohttp.ClientTimeout(total=60)
-
     async with (
         asyncio.timeout(config.total_timeout),
-        aiohttp.ClientSession(timeout=client_timeout) as session,
+        client_session(config.user_agent, config.request_timeout) as session,
     ):
         tasks = []
         repo_names = []
@@ -108,13 +101,20 @@ def sync_rrdp_command():
     default=None,
     help="Per-request timeout in seconds (default: 300, 0 to disable)",
 )
+@click.option(
+    "--user-agent",
+    type=str,
+    default=None,
+    help="Override user_agent from config (default: rrdp-tools/<version>)",
+)
 def sync_rrdp_run_command(
     config_file: Path,
-    parallel_connections: Optional[int],
-    base_dir: Optional[Path],
+    parallel_connections: int | None,
+    base_dir: Path | None,
     verbose: bool,
-    total_timeout: Optional[int],
-    request_timeout: Optional[int],
+    total_timeout: int | None,
+    request_timeout: int | None,
+    user_agent: str | None,
 ):
     """Sync all RRDP repositories defined in a TOML config file.
 
@@ -133,6 +133,8 @@ def sync_rrdp_run_command(
         config.total_timeout = total_timeout
     if request_timeout is not None:
         config.request_timeout = request_timeout
+    if user_agent is not None:
+        config.user_agent = user_agent
 
     click.echo(
         f"Syncing {len(config.repositories)} repositories "
@@ -150,8 +152,6 @@ def sync_rrdp_run_command(
 
 
 # Register sub-commands
-from .import_metrics import import_rrdp_repos_from_metrics_command  # noqa: E402
-
 sync_rrdp_command.add_command(
     import_rrdp_repos_from_metrics_command, "import-from-metrics"
 )

@@ -1,6 +1,6 @@
 [project]
 name = "rrdp-tools"
-version = "0.4.1"
+version = "0.4.2"
 description = ""
 authors = [{name="Ties de Kock", email="ties@tiesdekock.nl"}]
 requires-python = ">=3.11"
@@ -31,7 +31,7 @@ dev = [
   "check-manifest>=0.51",
   "pytest-cov>=4.1.0",
   "pytest-xdist>=3.3.1",
-  "ruff>=0.14"
+  "ruff>=0.16.2"
 ]
 
 [build-system]
