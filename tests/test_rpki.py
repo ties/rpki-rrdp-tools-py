@@ -14,9 +14,7 @@ def test_parse_file_time(
 ) -> None:
     caplog.set_level(logging.DEBUG)
 
-    yesterday = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(
-        minutes=1
-    )
+    yesterday = datetime.datetime.now(datetime.UTC) - datetime.timedelta(minutes=1)
 
     sample_files = pathlib.Path(__file__).parent / "data/"
     for file in (

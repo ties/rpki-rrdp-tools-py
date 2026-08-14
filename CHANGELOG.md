@@ -1,5 +1,8 @@
 # Changelog
 
+## main:
+  * Recognisable user-agent, which is configurable for RRDP sync.
+
 ## v0.4.1:
   * BSD 3-clause license
   * dependency updates

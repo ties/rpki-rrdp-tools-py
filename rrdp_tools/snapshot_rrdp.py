@@ -6,11 +6,11 @@ import os
 import time
 import urllib.parse
 from pathlib import Path
-from typing import Optional
 
 import aiohttp
 import click
 
+from .http_client import client_session
 from .rrdp import parse_notification_file
 
 logging.basicConfig()
@@ -27,7 +27,7 @@ def set_time_from_headers(res: aiohttp.ClientResponse, target_file: Path) -> Non
                 target_file,
                 (last_modified_date.timestamp(), last_modified_date.timestamp()),
             )
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         LOG.warning("Failed to set mtime on %s: %s", target_file, e)
 
 
@@ -38,7 +38,7 @@ async def get_and_check(
     file_name: str,
     uri: str,
     sha256: str,
-    override_host: Optional[str],
+    override_host: str | None,
     hash_in_name: bool = False,
 ) -> bool:
     """
@@ -111,21 +111,21 @@ async def get_and_check(
 async def snapshot_rrdp(
     notification_url: str,
     output_path: Path,
-    override_host: Optional[str] = None,
+    override_host: str | None = None,
     skip_snapshot: bool = False,
     include_session: bool = False,
     threads: int = 4,
-    limit_deltas: Optional[int] = None,
+    limit_deltas: int | None = None,
     include_hash: bool = False,
     store_notification: bool = True,
-    sem: Optional[asyncio.Semaphore] = None,
-    session: Optional[aiohttp.ClientSession] = None,
+    sem: asyncio.Semaphore | None = None,
+    session: aiohttp.ClientSession | None = None,
 ):
     """Snapshot RRDP content."""
     sem = sem or asyncio.Semaphore(threads)
     owns_session = session is None
     if owns_session:
-        session = aiohttp.ClientSession()
+        session = client_session()
     try:
         LOG.debug("GET %s", notification_url)
         res = await session.get(notification_url)
@@ -241,12 +241,12 @@ async def snapshot_rrdp(
 def snapshot_rrdp_command(
     notification_url: str,
     output_dir: Path,
-    override_host: Optional[str] = None,
+    override_host: str | None = None,
     include_session: bool = False,
     verbose: bool = False,
     skip_snapshot: bool = True,
     threads: int = 4,
-    limit_deltas: Optional[int] = None,
+    limit_deltas: int | None = None,
     create_target: bool = False,
     include_hash: bool = True,
     store_notification: bool = True,

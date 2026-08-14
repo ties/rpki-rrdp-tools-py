@@ -6,13 +6,12 @@ import itertools
 import logging
 import multiprocessing
 import re
+from collections.abc import Callable, Generator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, FrozenSet, Generator, List, Optional, Union
 
 import asn1crypto
 import click
-from alive_progress import alive_bar
 
 from rrdp_tools.rpki import FileAndHash, parse_file_time, parse_manifest
 from rrdp_tools.rrdp import (
@@ -38,14 +37,14 @@ class ManifestMatch:
     manifest_number: int
     signing_time: datetime
     ee_certificate: asn1crypto.x509.Certificate
-    file_list: FrozenSet[FileAndHash]
+    file_list: frozenset[FileAndHash]
 
-    previous_hash: Optional[str]
-    h_content: Union[str, None] = None
+    previous_hash: str | None
+    h_content: str | None = None
 
-    authority_information_access: Optional[str] = None
-    this_update: Optional[str] = None
-    next_update: Optional[str] = None
+    authority_information_access: str | None = None
+    this_update: str | None = None
+    next_update: str | None = None
 
 
 @dataclass
@@ -56,19 +55,19 @@ class PublishMatch:
     session_id: str
 
     uri: str
-    previous_hash: Optional[str]
+    previous_hash: str | None
     content: bytes
 
     modification_time: datetime
 
-    h_content: Union[str, None] = None
+    h_content: str | None = None
 
 
 def process_file(
     xml_file: Path,
     file_match: re.Pattern,
     log_content: bool = False,
-    progress_bar: Optional[alive_bar] = None,
+    progress_bar: Callable[[], None] | None = None,
 ) -> Generator[ManifestMatch | PublishMatch, None, None]:
     LOG.debug("processing %s", xml_file)
 
@@ -107,7 +106,7 @@ def process_file(
 
 def process_file_to_list(
     xml_file: Path, file_match: re.Pattern, log_content: bool = False
-) -> List[ManifestMatch | PublishMatch]:
+) -> list[ManifestMatch | PublishMatch]:
     return list(process_file(xml_file, file_match, log_content))
 
 
@@ -116,7 +115,7 @@ async def filter_rrdp_content(
     file_match: re.Pattern,
     log_content: bool,
     print_manifest_diff: bool,
-    store_content: Optional[Path] = None,
+    store_content: Path | None = None,
 ):
     files = list(path.glob("**/*.xml"))
     LOG.info("found %d files", len(files))
@@ -129,7 +128,7 @@ async def filter_rrdp_content(
     matches = list(itertools.chain.from_iterable(match_lists))
 
     # map uri -> previous manifest
-    previous_manifest: Dict[str, ManifestMatch] = {}
+    previous_manifest: dict[str, ManifestMatch] = {}
 
     for entry in sorted(matches, key=lambda x: x.serial):
         if store_content:
@@ -191,7 +190,7 @@ def filter_rrdp_content_command(
     verbose: bool,
     log_content: bool,
     manifest_diff: bool,
-    store_content: Optional[Path],
+    store_content: Path | None,
 ):
     """Scan a set of RRDP documents and print out matching files."""
     logging.basicConfig()

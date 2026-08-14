@@ -69,6 +69,8 @@ By default the directory used is the hostname, filenames contain the hash (`delt
 # rrdp-config.toml
 parallel_connections = 4
 base_dir = "/data/rrdp"
+# User-Agent header for all requests, default: rrdp-tools/<version>
+# user_agent = "rrdp-tools mirror (contact: noc@example.com)"
 
 [[repository]]
 notification_url = "https://rrdp.ripe.net/notification.xml"

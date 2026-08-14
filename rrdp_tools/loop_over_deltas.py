@@ -9,6 +9,8 @@ from pathlib import Path
 import aiohttp
 import click
 
+from .http_client import client_session
+
 logging.basicConfig()
 
 LOG = logging.getLogger(Path(__file__).name)
@@ -28,8 +30,8 @@ async def get_and_check(
     async with session.get(download.uri) as response:
         LOG.debug("[%d] HTTP %d %.3fs", i, response.status, time.time() - t0)
         if response.status == 200:
-            with open(download.target_file, "wb") as f:
-                f.write(await response.read())
+            body = await response.read()
+            await asyncio.to_thread(download.target_file.write_bytes, body)
             LOG.info(
                 "[%d] Downloaded %s to %s in %.3fs",
                 i,
@@ -50,7 +52,7 @@ async def worker(
         processed += 1
         try:
             await get_and_check(i, session, download)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             LOG.error(e)
         finally:
             queue.task_done()
@@ -70,7 +72,7 @@ async def attempt_delta_download(
             )
         )
 
-    async with aiohttp.ClientSession() as session:
+    async with client_session() as session:
         workers = [
             worker(i, session, queue) for i in range(multiprocessing.cpu_count())
         ]
@@ -107,7 +109,7 @@ def loop_over_deltas(
         LOG.setLevel(logging.DEBUG)
 
     if not output_dir.is_dir():
-        LOG.error("Output directory {} does not exist", output_dir)
+        LOG.error("Output directory %s does not exist", output_dir)
         sys.exit(2)
 
     asyncio.run(attempt_delta_download(url_template, output_dir, start, end))

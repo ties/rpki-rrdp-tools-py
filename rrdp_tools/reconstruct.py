@@ -8,13 +8,13 @@ import urllib.parse
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, TextIO
+from typing import TextIO
 
-import aiohttp
 import click
 
 from rrdp_tools.rpki import parse_file_time
 
+from .http_client import client_session
 from .rrdp import (
     PublishElement,
     RrdpElement,
@@ -29,7 +29,7 @@ LOG = logging.getLogger(__name__)
 
 async def http_get_delta_or_snapshot(uri: str) -> TextIO:
     LOG.info("Downloading from %s", uri)
-    async with aiohttp.ClientSession() as session:
+    async with client_session() as session:
         response = await session.get(uri)
         assert response.status == 200
 
@@ -54,7 +54,7 @@ async def http_get_delta_or_snapshot(uri: str) -> TextIO:
 def reconstruct_repo(
     rrdp_file: TextIO,
     output_path: Path,
-    filter_match: List[str],
+    filter_match: list[str],
     verify_only: bool = False,
     parse_for_time: bool = False,
 ):
@@ -72,7 +72,7 @@ def reconstruct_repo(
 
         return False
 
-    seen_objects: Dict[str, RrdpElement] = defaultdict(set)
+    seen_objects: dict[str, RrdpElement] = defaultdict(set)
     publishes, withdraws = 0, 0
 
     doc = parse_snapshot_or_delta(rrdp_file)
@@ -213,7 +213,7 @@ def reconstruct_repo_command(
     infile: str,
     output_dir: Path,
     create_target: bool,
-    filename_pattern: List[str],
+    filename_pattern: list[str],
     verify_only: bool = False,
     verbose: bool = False,
     parse_for_time: bool = False,

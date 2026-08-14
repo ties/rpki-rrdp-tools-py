@@ -1,8 +1,7 @@
+import datetime
 import logging
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
-from typing import FrozenSet, Optional
 
 import asn1tools
 from asn1crypto import cms, crl, x509
@@ -26,7 +25,7 @@ ID_AD_SIGNED_OBJECT = "1.3.6.1.5.5.7.48.11"
 
 @dataclass
 class RpkiSignedObject:
-    signing_time: Optional[datetime]
+    signing_time: datetime.datetime | None
     ee_certificate: x509.Certificate
     content: bytes
 
@@ -62,11 +61,11 @@ class FileAndHash:
 @dataclass
 class ManifestInfo:
     manifest_number: int
-    signing_time: datetime
-    this_update: datetime
-    next_update: datetime
+    signing_time: datetime.datetime
+    this_update: datetime.datetime
+    next_update: datetime.datetime
     ee_certificate: x509.Certificate
-    file_list: FrozenSet[FileAndHash]
+    file_list: frozenset[FileAndHash]
 
     @property
     def authority_information_access(self) -> str:
@@ -105,7 +104,7 @@ def parse_manifest(content: bytes) -> ManifestInfo:
     )
 
 
-def parse_file_time(file_name: str, content: bytes) -> datetime:
+def parse_file_time(file_name: str, content: bytes) -> datetime.datetime:
     """
     Extract the file modification time (according to the current RPKI interpretation) from signed objects.
     """
@@ -128,4 +127,4 @@ def parse_file_time(file_name: str, content: bytes) -> datetime:
                 if attr["type"].native == "signing_time":
                     return attr["values"][0].native
     # Fallback to current time
-    return datetime.now()
+    return datetime.datetime.now(tz=datetime.UTC)

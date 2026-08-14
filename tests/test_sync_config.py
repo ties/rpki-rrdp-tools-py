@@ -99,6 +99,25 @@ class TestLoadConfig:
         config = load_config(config_file)
         assert config.parallel_connections == 16
 
+    def test_user_agent(self, tmp_path):
+        config_file = tmp_path / "config.toml"
+        config_file.write_text(
+            'base_dir = "/data"\nuser_agent = "example-agent/1.0"\n\n'
+            '[[repository]]\nnotification_url = "https://x.com/n.xml"\n'
+        )
+
+        config = load_config(config_file)
+        assert config.user_agent == "example-agent/1.0"
+
+    def test_user_agent_defaults_to_none(self, tmp_path):
+        config_file = tmp_path / "config.toml"
+        config_file.write_text(
+            'base_dir = "/data"\n\n[[repository]]\nnotification_url = "https://x.com/n.xml"\n'
+        )
+
+        config = load_config(config_file)
+        assert config.user_agent is None
+
 
 class TestFormatToml:
     def test_round_trip(self):
@@ -208,6 +227,28 @@ class TestFormatToml:
         assert repo["skip_snapshot"] is False
         assert repo["include_hash"] is False
         assert repo["limit_deltas"] == 10
+
+    def test_user_agent_round_trip(self):
+        config = SyncConfig(
+            base_dir="/data",
+            user_agent="example-agent/1.0",
+            repositories=[
+                RepositoryConfig(notification_url="https://x.com/n.xml"),
+            ],
+        )
+
+        parsed = tomllib.loads(format_toml(config))
+        assert parsed["user_agent"] == "example-agent/1.0"
+
+    def test_user_agent_omitted_when_unset(self):
+        config = SyncConfig(
+            base_dir="/data",
+            repositories=[
+                RepositoryConfig(notification_url="https://x.com/n.xml"),
+            ],
+        )
+
+        assert "user_agent" not in format_toml(config)
 
 
 class TestConfigFromUrls:
