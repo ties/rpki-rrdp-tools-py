@@ -8,6 +8,7 @@ from pathlib import Path
 class Shard(StrEnum):
     NONE = "none"
     YEAR_MONTH = "year-month"
+    YEAR_MONTH_DAY = "year-month-day"
 
 
 def resolve_output_dir(base_dir: Path, shard: Shard, now: datetime) -> Path:
@@ -16,6 +17,8 @@ def resolve_output_dir(base_dir: Path, shard: Shard, now: datetime) -> Path:
             return base_dir
         case Shard.YEAR_MONTH:
             return base_dir / f"{now:%Y}" / f"{now:%m}"
+        case Shard.YEAR_MONTH_DAY:
+            return base_dir / f"{now:%Y}" / f"{now:%m}" / f"{now:%d}"
 
 
 def daily_log_file(output_dir: Path, now: datetime) -> Path:

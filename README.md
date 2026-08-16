@@ -159,6 +159,16 @@ makes sure that the containers are created (and removed after they run) periodic
 
 The services are one-shot services that remove the container after it exits.
 
+#### Deployment-specific settings
+
+Quadlet merges `<unit>.container.d/*.conf` into a unit (podman 5.0+), similar
+to how overrides work. The deploy uses to this to add settings without editing
+the unit files. Put them in `systemd/local/`, mirroring `/etc/containers/systemd/`:
+
+```
+systemd/local/rrdp-sync.container.d/50-healthcheck.conf
+```
+
 # Usage in SQL
 
 This library can also be used in PostgreSQL if you install the library into the

@@ -7,8 +7,29 @@
     image_name: ghcr.io/ties/rpki-rrdp-tools-py
     image_tag: latest
     systemd_quadlet_path: /etc/containers/systemd
+    # Also hardcoded in the .container files as Volume= and --base-dir
+    data_dir: /data
+    # Host that gets the drop-ins (alerts)
+    dropin_host: rrdp.rpkiviews.org
 
   tasks:
+    - name: Install podman
+      ansible.builtin.apt:
+        name: podman
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    # The containers map their uid 999 to host 65534, and the tool itself
+    # creates the YYYY/MM directories below this one => has to be writable by nobody.
+    - name: Ensure the data directory exists and is writable by the containers
+      ansible.builtin.file:
+        path: "{{ data_dir }}"
+        state: directory
+        owner: nobody
+        group: nogroup
+        mode: '0755'
+
     - name: Ensure /etc/containers/systemd directory exists
       ansible.builtin.file:
         path: "{{ systemd_quadlet_path }}"
@@ -44,6 +65,25 @@
         - rrdp-import.container
         - rrdp-sync.container
       notify: Reload systemd daemon
+
+    - name: Host-local quadlet drop-ins/alerts
+      when: dropin_host in [inventory_hostname, ansible_facts.get('fqdn', '')]
+      block:
+        - name: Look for host-local quadlet drop-ins
+          ansible.builtin.stat:
+            path: "{{ playbook_dir }}/systemd/local"
+          delegate_to: localhost
+          become: false
+          register: local_dropins
+
+        - name: Deploy host-local quadlet drop-ins
+          ansible.builtin.copy:
+            src: systemd/local/
+            dest: "{{ systemd_quadlet_path }}/"
+            mode: '0600'
+            directory_mode: '0755'
+          when: local_dropins.stat.exists
+          notify: Reload systemd daemon
 
     - name: Copy systemd timers
       ansible.builtin.copy:

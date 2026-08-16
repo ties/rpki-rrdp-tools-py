@@ -7,3 +7,6 @@ asn1/
 .coverage
 htmlcov/
 .venv
+
+# Host-local quadlet drop-ins used by ansible.
+systemd/local/
