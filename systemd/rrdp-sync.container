@@ -22,4 +22,4 @@ Restart=on-failure
 SyslogIdentifier=rrdp-sync
 NoNewPrivileges=true
 
-ExecStopPost=/bin/sh -c '/usr/bin/journalctl -u rrdp-sync.service --invocation 0 >> /data/logs/$$(date +%%Y%%m%%d).log'
+# The generated config enables the daily log. Use RRDP_LOG_LEVEL to adjust it.
