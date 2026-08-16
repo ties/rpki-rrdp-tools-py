@@ -1,21 +1,35 @@
 import asyncio
 import logging
 import urllib.parse
+from datetime import UTC, datetime
 from pathlib import Path
 
 import click
 
 from .http_client import client_session
 from .import_metrics import import_rrdp_repos_from_metrics_command
+from .logging_config import LOG_LEVELS, configure_logging
+from .sharding import Shard, daily_log_file, resolve_output_dir
 from .snapshot_rrdp import snapshot_rrdp
-from .sync_config import SyncConfig, load_config
+from .sync_config import RepositoryConfig, SyncConfig, load_config
 
 LOG = logging.getLogger(__name__)
 
 
-async def sync_rrdp(config: SyncConfig) -> None:
-    """Run snapshot_rrdp for each configured repository."""
-    base_dir = Path(config.base_dir)
+def allowed_output_root(repo: RepositoryConfig, base_dir: Path) -> Path:
+    """Return the root allowed by the name's trust level.
+
+    Configured names are operator input; URL-derived names are confined to
+    their hostname so path traversal cannot reach another repository.
+    """
+    if repo.name:
+        return base_dir.resolve()
+    hostname = urllib.parse.urlparse(repo.notification_url).hostname
+    return (base_dir / hostname).resolve()
+
+
+async def sync_rrdp(config: SyncConfig, base_dir: Path) -> None:
+    """Sync configured repositories into the resolved output directory."""
     sem = asyncio.Semaphore(config.parallel_connections)
 
     async with (
@@ -26,15 +40,13 @@ async def sync_rrdp(config: SyncConfig) -> None:
         repo_names = []
         for repo in config.repositories:
             output_path = (base_dir / repo.effective_name).resolve()
-            hostname_dir = (
-                base_dir / urllib.parse.urlparse(repo.notification_url).hostname
-            ).resolve()
-            if not output_path.is_relative_to(hostname_dir):
+            allowed_root = allowed_output_root(repo, base_dir)
+            if not output_path.is_relative_to(allowed_root):
                 LOG.error(
-                    "Skipping %s: output path %s escapes hostname directory %s",
+                    "Skipping %s: output path %s escapes %s",
                     repo.notification_url,
                     output_path,
-                    hostname_dir,
+                    allowed_root,
                 )
                 continue
             output_path.mkdir(parents=True, exist_ok=True)
@@ -59,10 +71,12 @@ async def sync_rrdp(config: SyncConfig) -> None:
     for name, result in zip(repo_names, results):
         if isinstance(result, Exception):
             failures += 1
-            click.echo(click.style(f"FAILED {name}: {result}", fg="red"), err=True)
+            LOG.error("FAILED %s: %s", name, result)
 
-    click.echo(
-        f"Sync completed: {len(results) - failures}/{len(results)} repositories succeeded."
+    LOG.info(
+        "Sync completed: %d/%d repositories succeeded.",
+        len(results) - failures,
+        len(results),
     )
     if failures:
         LOG.warning("%d/%d repositories failed", failures, len(results))
@@ -87,7 +101,14 @@ def sync_rrdp_command():
     default=None,
     help="Override base_dir from config",
 )
-@click.option("-v", "--verbose", is_flag=True)
+@click.option("-v", "--verbose", count=True, help="-v: debug, -vv: also aiohttp etc.")
+@click.option(
+    "--log-level",
+    type=click.Choice(LOG_LEVELS, case_sensitive=False),
+    envvar="RRDP_LOG_LEVEL",
+    default=None,
+    help="Set an explicit level for all loggers, overriding -v",
+)
 @click.option(
     "--timeout",
     "total_timeout",
@@ -107,23 +128,37 @@ def sync_rrdp_command():
     default=None,
     help="Override user_agent from config (default: rrdp-tools/<version>)",
 )
+@click.option(
+    "--shard",
+    type=click.Choice([s.value for s in Shard]),
+    default=None,
+    help="Override shard from config: split output by date below base_dir",
+)
+@click.option(
+    "--log-to-file/--no-log-to-file",
+    default=None,
+    help="Override log_to_file from config: append to <output dir>/YYYYMMDD.log",
+)
 def sync_rrdp_run_command(
     config_file: Path,
     parallel_connections: int | None,
     base_dir: Path | None,
-    verbose: bool,
+    verbose: int,
+    log_level: str | None,
     total_timeout: int | None,
     request_timeout: int | None,
     user_agent: str | None,
+    shard: str | None,
+    log_to_file: bool | None,
 ):
     """Sync all RRDP repositories defined in a TOML config file.
 
     CONFIG_FILE    Path to TOML config file.
     """
-    if verbose:
-        logging.basicConfig(level=logging.DEBUG)
-
-    config = load_config(config_file)
+    try:
+        config = load_config(config_file)
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
 
     if parallel_connections is not None:
         config.parallel_connections = parallel_connections
@@ -135,19 +170,31 @@ def sync_rrdp_run_command(
         config.request_timeout = request_timeout
     if user_agent is not None:
         config.user_agent = user_agent
+    if shard is not None:
+        config.shard = Shard(shard)
+    if log_to_file is not None:
+        config.log_to_file = log_to_file
 
-    click.echo(
-        f"Syncing {len(config.repositories)} repositories "
-        f"(parallel_connections={config.parallel_connections}, base_dir={config.base_dir})"
+    # Keep repositories and the log in the same date shard.
+    now = datetime.now(tz=UTC)
+    output_dir = resolve_output_dir(Path(config.base_dir), config.shard, now)
+    configure_logging(
+        verbose,
+        daily_log_file(output_dir, now) if config.log_to_file else None,
+        log_level,
+    )
+
+    LOG.info(
+        "Syncing %d repositories (parallel_connections=%d, output_dir=%s)",
+        len(config.repositories),
+        config.parallel_connections,
+        output_dir,
     )
 
     try:
-        asyncio.run(sync_rrdp(config))
+        asyncio.run(sync_rrdp(config, output_dir))
     except TimeoutError:
-        click.echo(
-            click.style(f"Sync timed out after {config.total_timeout}s", fg="red"),
-            err=True,
-        )
+        LOG.error("Sync timed out after %ss", config.total_timeout)
         raise SystemExit(1)
 
 

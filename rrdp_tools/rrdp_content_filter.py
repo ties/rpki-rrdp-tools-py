@@ -13,6 +13,7 @@ from pathlib import Path
 import asn1crypto
 import click
 
+from rrdp_tools.logging_config import LOG_LEVELS, configure_logging
 from rrdp_tools.rpki import FileAndHash, parse_file_time, parse_manifest
 from rrdp_tools.rrdp import (
     PublishElement,
@@ -171,7 +172,14 @@ async def filter_rrdp_content(
     type=click.Path(exists=True, file_okay=False, resolve_path=True, path_type=Path),
 )
 @click.option("--file-match", type=str, default=".*\\.mft")
-@click.option("--verbose", "-v", is_flag=True)
+@click.option("-v", "--verbose", count=True, help="-v: debug, -vv: also aiohttp etc.")
+@click.option(
+    "--log-level",
+    type=click.Choice(LOG_LEVELS, case_sensitive=False),
+    envvar="RRDP_LOG_LEVEL",
+    default=None,
+    help="Set an explicit level for all loggers, overriding -v",
+)
 @click.option("--log-content", "-l", is_flag=True)
 @click.option(
     "--store-content",
@@ -187,17 +195,14 @@ async def filter_rrdp_content(
 def filter_rrdp_content_command(
     path: Path,
     file_match: str,
-    verbose: bool,
+    verbose: int,
+    log_level: str | None,
     log_content: bool,
     manifest_diff: bool,
     store_content: Path | None,
 ):
     """Scan a set of RRDP documents and print out matching files."""
-    logging.basicConfig()
-    if verbose:
-        logging.getLogger().setLevel(logging.DEBUG)
-    else:
-        logging.getLogger().setLevel(logging.INFO)
+    configure_logging(verbose, log_level=log_level)
 
     asyncio.run(
         filter_rrdp_content(

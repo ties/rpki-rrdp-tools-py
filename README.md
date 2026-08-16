@@ -71,6 +71,10 @@ parallel_connections = 4
 base_dir = "/data/rrdp"
 # User-Agent header for all requests, default: rrdp-tools/<version>
 # user_agent = "rrdp-tools mirror (contact: noc@example.com)"
+# Write output below base_dir/YYYY/MM (UTC).
+# shard = "year-month"
+# Append logs to <output dir>/YYYYMMDD.log.
+# log_to_file = true
 
 [[repository]]
 notification_url = "https://rrdp.ripe.net/notification.xml"
@@ -97,6 +101,18 @@ uv run python -m rrdp_tools.cli sync-rrdp run rrdp-config.toml --base-dir /tmp/r
 Each repository is stored in a subdirectory of `base_dir`, named by the
 `name` field (or the hostname from the notification URL if not set).
 
+A configured `name` may be a nested path within `base_dir`. URL-derived names
+are confined to their hostname directory; invalid paths are skipped.
+
+### Sharding output by date, and logging to file
+
+`shard = "year-month"` writes each run below `base_dir/YYYY/MM` in UTC. A new
+month starts empty, so repositories are fetched in full after rollover.
+
+`log_to_file = true` also appends logs to `YYYYMMDD.log` in that directory.
+
+Use `-v`, `-vv`, `--log-level`, or `RRDP_LOG_LEVEL` to adjust verbosity.
+
 ## Generate a sync config from rpki-client metrics
 
 `sync-rrdp import-from-metrics` parses an rpki-client metrics file and
@@ -106,7 +122,11 @@ unique `notify=` URLs from the metrics.
 ```
 uv run python -m rrdp_tools.cli sync-rrdp import-from-metrics /var/lib/rpki-client/metrics -o rrdp-config.toml
 uv run python -m rrdp_tools.cli sync-rrdp import-from-metrics /var/lib/rpki-client/metrics --base-dir /data/rrdp
+uv run python -m rrdp_tools.cli sync-rrdp import-from-metrics /var/lib/rpki-client/metrics --base-dir /data --shard year-month --log-to-file
 ```
+
+Options are stored in the generated config. Output files are replaced
+atomically, overwriting existing content.
 
 ### Run with podman and systemd
 

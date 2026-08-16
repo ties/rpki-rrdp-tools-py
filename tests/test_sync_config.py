@@ -2,6 +2,7 @@ import tomllib
 
 import pytest
 
+from rrdp_tools.sharding import Shard
 from rrdp_tools.sync_config import (
     RepositoryConfig,
     SyncConfig,
@@ -117,6 +118,75 @@ class TestLoadConfig:
 
         config = load_config(config_file)
         assert config.user_agent is None
+
+    def test_shard_and_log_to_file(self, tmp_path):
+        config_file = tmp_path / "config.toml"
+        config_file.write_text(
+            'base_dir = "/data"\nshard = "year-month"\nlog_to_file = true\n\n'
+            '[[repository]]\nnotification_url = "https://x.com/n.xml"\n'
+        )
+
+        config = load_config(config_file)
+        assert config.shard is Shard.YEAR_MONTH
+        assert config.log_to_file is True
+        assert config.base_dir == "/data"
+
+    def test_shard_and_log_to_file_defaults(self, tmp_path):
+        config_file = tmp_path / "config.toml"
+        config_file.write_text(
+            'base_dir = "/data"\n\n[[repository]]\nnotification_url = "https://x.com/n.xml"\n'
+        )
+
+        config = load_config(config_file)
+        assert config.shard is Shard.NONE
+        assert config.log_to_file is False
+
+    @pytest.mark.parametrize(
+        "url,expected",
+        [
+            ("notaurl", "scheme"),
+            ("/rrdp/notification.xml", "scheme"),
+            ("rsync://rpki.example.com/repo", "scheme"),
+            ("https:///notification.xml", "no hostname"),
+            ("https://[::1/notification.xml", "IPv6"),
+        ],
+    )
+    def test_invalid_notification_url(self, tmp_path, url, expected):
+        config_file = tmp_path / "config.toml"
+        config_file.write_text(
+            f'base_dir = "/data"\n\n[[repository]]\nnotification_url = "{url}"\n'
+        )
+
+        with pytest.raises(ValueError, match="Invalid notification_url") as excinfo:
+            load_config(config_file)
+        assert expected in str(excinfo.value)
+        assert url in str(excinfo.value)
+
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "https://rrdp.ripe.net/notification.xml",
+            "http://localhost:8080/notification.xml",
+            "https://[::1]:8443/notification.xml",
+        ],
+    )
+    def test_accepts_usable_notification_urls(self, tmp_path, url):
+        config_file = tmp_path / "config.toml"
+        config_file.write_text(
+            f'base_dir = "/data"\n\n[[repository]]\nnotification_url = "{url}"\n'
+        )
+
+        assert load_config(config_file).repositories[0].notification_url == url
+
+    def test_unknown_shard(self, tmp_path):
+        config_file = tmp_path / "config.toml"
+        config_file.write_text(
+            'base_dir = "/data"\nshard = "fortnightly"\n\n'
+            '[[repository]]\nnotification_url = "https://x.com/n.xml"\n'
+        )
+
+        with pytest.raises(ValueError, match="Unknown 'shard' value"):
+            load_config(config_file)
 
 
 class TestFormatToml:
@@ -250,6 +320,36 @@ class TestFormatToml:
 
         assert "user_agent" not in format_toml(config)
 
+    def test_shard_and_log_to_file_round_trip(self, tmp_path):
+        config = SyncConfig(
+            base_dir="/data",
+            shard=Shard.YEAR_MONTH,
+            log_to_file=True,
+            repositories=[
+                RepositoryConfig(notification_url="https://x.com/n.xml"),
+            ],
+        )
+
+        config_file = tmp_path / "config.toml"
+        config_file.write_text(format_toml(config))
+        reloaded = load_config(config_file)
+
+        assert reloaded.shard is Shard.YEAR_MONTH
+        assert reloaded.log_to_file is True
+        assert reloaded.base_dir == "/data"
+
+    def test_shard_and_log_to_file_omitted_when_default(self):
+        config = SyncConfig(
+            base_dir="/data",
+            repositories=[
+                RepositoryConfig(notification_url="https://x.com/n.xml"),
+            ],
+        )
+
+        toml_str = format_toml(config)
+        assert "shard" not in toml_str
+        assert "log_to_file" not in toml_str
+
 
 class TestConfigFromUrls:
     def test_creates_config(self):
@@ -263,3 +363,15 @@ class TestConfigFromUrls:
         assert config.parallel_connections == 16
         assert len(config.repositories) == 2
         assert config.repositories[0].notification_url == urls[0]
+
+    def test_passes_through_shard_and_log_to_file(self):
+        config = config_from_notification_urls(
+            ["https://x.com/n.xml"],
+            shard=Shard.YEAR_MONTH,
+            log_to_file=True,
+            user_agent="example-agent/1.0",
+        )
+
+        assert config.shard is Shard.YEAR_MONTH
+        assert config.log_to_file is True
+        assert config.user_agent == "example-agent/1.0"
