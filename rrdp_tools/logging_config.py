@@ -16,6 +16,7 @@ def configure_logging(
     log_level: str | None = None,
 ) -> None:
     """Configure console logging and an optional file."""
+    # info to stdout, more detailed levels to stderr.
     stdout = logging.StreamHandler(sys.stdout)
     stdout.addFilter(lambda record: record.levelno == logging.INFO)
     stderr = logging.StreamHandler()
