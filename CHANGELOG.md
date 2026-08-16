@@ -6,6 +6,8 @@
   * Add countable verbosity and explicit log-level configuration.
   * Fix named repository paths and validation of notification URLs.
   * Write generated configs atomically and preserve the configured user-agent.
+  * Shard output directory (--shard=none/year-month/year-month-day)
+  * Write logs to output directory
 
 ## v0.4.1:
   * BSD 3-clause license
