@@ -11,11 +11,10 @@ import aiohttp
 import click
 
 from .http_client import client_session
+from .logging_config import LOG_LEVELS, configure_logging
 from .rrdp import parse_notification_file
 
-logging.basicConfig()
 LOG = logging.getLogger(__name__)
-LOG.setLevel(logging.INFO)
 
 
 def set_time_from_headers(res: aiohttp.ClientResponse, target_file: Path) -> None:
@@ -130,10 +129,12 @@ async def snapshot_rrdp(
         LOG.debug("GET %s", notification_url)
         res = await session.get(notification_url)
         if res.status != 200:
-            click.echo(
-                f"HTTP {res.status} from RRDP server for {notification_url}, aborting"
+            LOG.error(
+                "HTTP %d from RRDP server for %s, aborting: %s",
+                res.status,
+                notification_url,
+                await res.text(),
             )
-            click.echo(f"reason: {await res.text()}")
             return
 
         notification = parse_notification_file(await res.text())
@@ -208,8 +209,11 @@ async def snapshot_rrdp(
             )
 
         status_per_file = await asyncio.gather(*queue)
-        click.echo(
-            f"{notification_url}: {len(queue)} files are present. Downloaded {sum(status_per_file)} files."
+        LOG.info(
+            "%s: %d files are present. Downloaded %d files.",
+            notification_url,
+            len(queue),
+            sum(status_per_file),
         )
     finally:
         if owns_session:
@@ -222,7 +226,14 @@ async def snapshot_rrdp(
 @click.option("--override-host", help="[protocol]://hostname to override", type=str)
 @click.option("--include-session", help="Include session ID in path", is_flag=True)
 @click.option("--create-target", help="Create target dir", is_flag=True)
-@click.option("-v", "--verbose", help="verbose", is_flag=True)
+@click.option("-v", "--verbose", count=True, help="-v: debug, -vv: also aiohttp etc.")
+@click.option(
+    "--log-level",
+    type=click.Choice(LOG_LEVELS, case_sensitive=False),
+    envvar="RRDP_LOG_LEVEL",
+    default=None,
+    help="Set an explicit level for all loggers, overriding -v",
+)
 @click.option("--skip_snapshot", help="Skip download of the RRDP snaphot", is_flag=True)
 @click.option(
     "--include-hash/--no-include-hash", help="Include hash in filenames", is_flag=True
@@ -243,7 +254,8 @@ def snapshot_rrdp_command(
     output_dir: Path,
     override_host: str | None = None,
     include_session: bool = False,
-    verbose: bool = False,
+    verbose: int = 0,
+    log_level: str | None = None,
     skip_snapshot: bool = True,
     threads: int = 4,
     limit_deltas: int | None = None,
@@ -257,8 +269,7 @@ def snapshot_rrdp_command(
     NOTIFICATION_URL    URL to notifcation.xml file.
     OUTPUT_DIR          Directory to save content in.
     """
-    if verbose:
-        LOG.setLevel(logging.DEBUG)
+    configure_logging(verbose, log_level=log_level)
     output_dir = output_dir.resolve()
 
     if not output_dir.is_dir():

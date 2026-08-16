@@ -15,6 +15,7 @@ import click
 from rrdp_tools.rpki import parse_file_time
 
 from .http_client import client_session
+from .logging_config import LOG_LEVELS, configure_logging
 from .rrdp import (
     PublishElement,
     RrdpElement,
@@ -23,7 +24,6 @@ from .rrdp import (
     parse_snapshot_or_delta,
 )
 
-logging.basicConfig()
 LOG = logging.getLogger(__name__)
 
 
@@ -202,7 +202,14 @@ def do_exit():
     multiple=True,
 )
 @click.option("--verify-only", help="verify mode: do not write any files", is_flag=True)
-@click.option("-v", "--verbose", help="verbose", is_flag=True)
+@click.option("-v", "--verbose", count=True, help="-v: debug, -vv: also aiohttp etc.")
+@click.option(
+    "--log-level",
+    type=click.Choice(LOG_LEVELS, case_sensitive=False),
+    envvar="RRDP_LOG_LEVEL",
+    default=None,
+    help="Set an explicit level for all loggers, overriding -v",
+)
 @click.option(
     "--parse-for-time/--no-parse-for-time",
     help="Parse files for notBefore/signing time",
@@ -215,14 +222,12 @@ def reconstruct_repo_command(
     create_target: bool,
     filename_pattern: list[str],
     verify_only: bool = False,
-    verbose: bool = False,
+    verbose: int = 0,
+    log_level: str | None = None,
     parse_for_time: bool = False,
 ):
     """Call the main reconstruct function with the correct arguments."""
-    if verbose:
-        logging.getLogger().setLevel(logging.DEBUG)
-    else:
-        logging.getLogger().setLevel(logging.INFO)
+    configure_logging(verbose, log_level=log_level)
 
     output_dir = output_dir.resolve()
 

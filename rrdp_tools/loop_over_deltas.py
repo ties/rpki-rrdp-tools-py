@@ -10,11 +10,9 @@ import aiohttp
 import click
 
 from .http_client import client_session
+from .logging_config import LOG_LEVELS, configure_logging
 
-logging.basicConfig()
-
-LOG = logging.getLogger(Path(__file__).name)
-LOG.setLevel(logging.INFO)
+LOG = logging.getLogger(__name__)
 
 
 @dataclass
@@ -94,9 +92,21 @@ async def attempt_delta_download(
         exists=True, file_okay=False, dir_okay=True, writable=True, path_type=Path
     ),
 )
-@click.option("--verbose", help="verbose", count=True)
+@click.option("-v", "--verbose", count=True, help="-v: debug, -vv: also aiohttp etc.")
+@click.option(
+    "--log-level",
+    type=click.Choice(LOG_LEVELS, case_sensitive=False),
+    envvar="RRDP_LOG_LEVEL",
+    default=None,
+    help="Set an explicit level for all loggers, overriding -v",
+)
 def loop_over_deltas(
-    url_template: str, start: int, end: int, output_dir: Path, verbose: bool
+    url_template: str,
+    start: int,
+    end: int,
+    output_dir: Path,
+    verbose: int,
+    log_level: str | None,
 ):
     """Loop over all the static guesses for the delta URL
 
@@ -105,8 +115,7 @@ def loop_over_deltas(
     END: Final number to template
     OUTPUT_DIR: Directory to write files to
     """
-    if verbose:
-        LOG.setLevel(logging.DEBUG)
+    configure_logging(verbose, log_level=log_level)
 
     if not output_dir.is_dir():
         LOG.error("Output directory %s does not exist", output_dir)

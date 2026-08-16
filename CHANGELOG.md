@@ -2,6 +2,10 @@
 
 ## v0.4.2:
   * Recognisable user-agent, which is configurable for RRDP sync.
+  * Add optional UTC year/month output sharding and daily file logging.
+  * Add countable verbosity and explicit log-level configuration.
+  * Fix named repository paths and validation of notification URLs.
+  * Write generated configs atomically and preserve the configured user-agent.
 
 ## v0.4.1:
   * BSD 3-clause license

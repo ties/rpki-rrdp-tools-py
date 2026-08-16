@@ -3,6 +3,8 @@ import urllib.parse
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 
+from .sharding import Shard
+
 
 @dataclass
 class RepositoryConfig:
@@ -34,6 +36,22 @@ class SyncConfig:
     request_timeout: int | None = 60
     total_timeout: int | None = 275
     user_agent: str | None = None
+    shard: Shard = Shard.NONE
+    log_to_file: bool = False
+
+
+def notification_url_error(url: str) -> str | None:
+    """Return why a notification URL is unusable, if applicable."""
+    try:
+        parsed = urllib.parse.urlparse(url)
+        hostname = parsed.hostname
+    except ValueError as exc:
+        return str(exc)
+    if parsed.scheme not in ("http", "https"):
+        return f"expected scheme http or https, got {parsed.scheme or 'none'!r}"
+    if not hostname:
+        return "URL has no hostname"
+    return None
 
 
 def load_config(path: Path) -> SyncConfig:
@@ -47,6 +65,11 @@ def load_config(path: Path) -> SyncConfig:
     for repo_data in data.get("repository", []):
         if "notification_url" not in repo_data:
             raise ValueError("Each [[repository]] must contain 'notification_url'")
+        # Hand-written configs fail rather than silently omitting repositories.
+        if error := notification_url_error(repo_data["notification_url"]):
+            raise ValueError(
+                f"Invalid notification_url {repo_data['notification_url']!r}: {error}"
+            )
         repos.append(
             RepositoryConfig(
                 notification_url=repo_data["notification_url"],
@@ -61,12 +84,22 @@ def load_config(path: Path) -> SyncConfig:
     if not repos:
         raise ValueError("Config file must contain at least one [[repository]]")
 
+    try:
+        shard = Shard(data.get("shard", Shard.NONE))
+    except ValueError:
+        valid = ", ".join(s.value for s in Shard)
+        raise ValueError(
+            f"Unknown 'shard' value {data['shard']!r}, expected one of: {valid}"
+        ) from None
+
     return SyncConfig(
         base_dir=str(Path(data["base_dir"]).expanduser()),
         parallel_connections=data.get("parallel_connections", 16),
         request_timeout=data.get("request_timeout", 60),
         total_timeout=data.get("total_timeout", 275),
         user_agent=data.get("user_agent"),
+        shard=shard,
+        log_to_file=data.get("log_to_file", False),
         repositories=repos,
     )
 
@@ -107,6 +140,10 @@ def format_toml(config: SyncConfig) -> str:
         lines.append(f"total_timeout = {config.total_timeout}")
     if config.user_agent is not None:
         lines.append(f'user_agent = "{config.user_agent}"')
+    if config.shard is not Shard.NONE:
+        lines.append(f'shard = "{config.shard.value}"')
+    if config.log_to_file:
+        lines.append("log_to_file = true")
 
     rir_repos = sorted(
         (r for r in config.repositories if _is_rir(r)),
@@ -140,6 +177,8 @@ def config_from_notification_urls(
     request_timeout: int | None = 60,
     total_timeout: int | None = 275,
     user_agent: str | None = None,
+    shard: Shard = Shard.NONE,
+    log_to_file: bool = False,
 ) -> SyncConfig:
     repos = [RepositoryConfig(notification_url=url) for url in urls]
     return SyncConfig(
@@ -148,5 +187,7 @@ def config_from_notification_urls(
         request_timeout=request_timeout,
         total_timeout=total_timeout,
         user_agent=user_agent,
+        shard=shard,
+        log_to_file=log_to_file,
         repositories=repos,
     )
