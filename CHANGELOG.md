@@ -1,6 +1,6 @@
 # Changelog
 
-## main:
+## v0.4.2:
   * Recognisable user-agent, which is configurable for RRDP sync.
 
 ## v0.4.1:
