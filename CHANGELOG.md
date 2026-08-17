@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.4.2:
+## v0.5.0:
   * Recognisable user-agent, which is configurable for RRDP sync.
   * Add optional UTC year/month output sharding and daily file logging.
   * Add countable verbosity and explicit log-level configuration.
