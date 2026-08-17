@@ -76,7 +76,7 @@ class TestSharding:
 
         assert synced == [tmp_path / HOST]
         assert "Syncing 1 repositories" in result.stdout
-        assert "Sync completed: 1/1 repositories succeeded." in result.stdout
+        assert "Sync completed: 1/1 repositories succeeded" in result.stdout
         assert result.stderr == ""
 
     def test_year_month_shard(self, tmp_path, synced):
@@ -140,7 +140,7 @@ class TestLogToFile:
             resolve_output_dir(tmp_path, Shard.YEAR_MONTH, now), now
         )
         contents = log_file.read_text()
-        assert "Sync completed: 1/1 repositories succeeded." in contents
+        assert "Sync completed: 1/1 repositories succeeded" in contents
         assert "Syncing 1 repositories" in contents
 
     def test_no_file_written_when_disabled(self, tmp_path, synced):
