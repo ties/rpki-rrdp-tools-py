@@ -31,6 +31,7 @@ def allowed_output_root(repo: RepositoryConfig, base_dir: Path) -> Path:
 async def sync_rrdp(config: SyncConfig, base_dir: Path) -> None:
     """Sync configured repositories into the resolved output directory."""
     sem = asyncio.Semaphore(config.parallel_connections)
+    t0 = datetime.now(tz=UTC)
 
     async with (
         asyncio.timeout(config.total_timeout),
@@ -74,9 +75,10 @@ async def sync_rrdp(config: SyncConfig, base_dir: Path) -> None:
             LOG.error("FAILED %s: %s", name, result)
 
     LOG.info(
-        "Sync completed: %d/%d repositories succeeded.",
+        "Sync completed: %d/%d repositories succeeded in %.3fs.",
         len(results) - failures,
         len(results),
+        (datetime.now(tz=UTC) - t0).total_seconds(),
     )
     if failures:
         LOG.warning("%d/%d repositories failed", failures, len(results))
