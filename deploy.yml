@@ -7,9 +7,10 @@
     image_name: ghcr.io/ties/rpki-rrdp-tools-py
     image_tag: latest
     systemd_quadlet_path: /etc/containers/systemd
-    # Also hardcoded in the .container files as Volume= and --base-dir
+    # Also used in Quadlet volumes and --base-dir.
     data_dir: /data
-    # Host that gets the drop-ins (alerts)
+    # Host on which the drop-ins should be deployed
+    # This sets up the health check.
     dropin_host: rrdp.rpkiviews.org
 
   tasks:
@@ -20,8 +21,7 @@
         update_cache: true
         cache_valid_time: 3600
 
-    # The containers map their uid 999 to host 65534, and the tool itself
-    # creates the YYYY/MM directories below this one => has to be writable by nobody.
+    # Container UID 999 maps to nobody, which creates the YYYY/MM directories.
     - name: Ensure the data directory exists and is writable by the containers
       ansible.builtin.file:
         path: "{{ data_dir }}"
@@ -44,31 +44,102 @@
 
     - name: Extract image digest
       ansible.builtin.set_fact:
-        # podman_image returns 'Digest' within the first element of the 'image' list
+        # podman_image nests Digest in the first image entry.
         image_digest: "{{ image_info.image[0].Digest }}"
 
-    - name: Deploy rrdp-tools image definition
-      ansible.builtin.copy:
-        dest: "{{ systemd_quadlet_path }}/rrdp-tools.image"
-        content: |
-          [Image]
-          Image={{ image_name }}@{{ image_digest }}
-        mode: '0644'
+    - name: Deploy rrdp-tools image quadlet
+      containers.podman.podman_image:
+        name: "{{ image_name }}@{{ image_digest }}"
+        state: quadlet
+        quadlet_dir: "{{ systemd_quadlet_path }}"
+        quadlet_filename: rrdp-tools
+        quadlet_file_mode: '0644'
       notify: Reload systemd daemon
 
-    - name: Deploy systemd Quadlet unit files
-      ansible.builtin.copy:
-        src: "systemd/{{ item }}"
-        dest: "{{ systemd_quadlet_path }}/{{ item }}"
-        mode: '0644'
-      loop:
-        - rrdp-import.container
-        - rrdp-sync.container
-      notify: Reload systemd daemon
+    - name: Deploy rrdp-import container quadlet
+      containers.podman.podman_container:
+        name: rrdp-import
+        image: rrdp-tools.image
+        state: quadlet
+        quadlet_dir: "{{ systemd_quadlet_path }}"
+        quadlet_filename: rrdp-import
+        quadlet_file_mode: '0644'
+        # Store repositories and logs below /data/YYYY/MM.
+        command: >
+          sync-rrdp import-from-metrics
+          --base-dir /data
+          --shard year-month
+          --log-to-file
+          --request-timeout 45
+          --user-agent "OpenBSD rpki-client"
+          -o /data/rrdp_sync.toml /metrics
+        log_driver: passthrough
+        network: none
+        read_only: true
+        cap_drop: [ALL]
+        # Map container user 999 to host nobody.
+        uidmap: ['0:0:999', '999:65534:1']
+        gidmap: ['0:0:999', '999:65534:1']
+        volumes:
+          - /var/lib/rpki-client/metrics:/metrics:ro
+          - /data:/data
+        quadlet_options:
+          - |
+            [Unit]
+            Description=Import rpki-client metrics and generate RRDP sync config
+          # Retry when a repository fails.
+          - |
+            [Service]
+            Type=oneshot
+            Restart=on-failure
+            SyslogIdentifier=rrdp-import
+            NoNewPrivileges=true
+      register: import_quadlet
+      notify:
+        - Reload systemd daemon
+        - Re-run changed quadlet services
+
+    - name: Deploy rrdp-sync container quadlet
+      containers.podman.podman_container:
+        name: rrdp-sync
+        image: rrdp-tools.image
+        state: quadlet
+        quadlet_dir: "{{ systemd_quadlet_path }}"
+        quadlet_filename: rrdp-sync
+        quadlet_file_mode: '0644'
+        command: sync-rrdp run /data/rrdp_sync.toml --parallel-connections 64
+        log_driver: passthrough
+        read_only: true
+        cap_drop: [ALL]
+        # Map container user 999 to host nobody.
+        uidmap: ['0:0:999', '999:65534:1']
+        gidmap: ['0:0:999', '999:65534:1']
+        volumes:
+          - /data:/data
+        quadlet_options:
+          - |
+            [Unit]
+            Description=Run RRDP sync
+          # Retry when a repository fails.
+          # RRDP_LOG_LEVEL adjusts the configured daily log.
+          - |
+            [Service]
+            Type=oneshot
+            Restart=on-failure
+            SyslogIdentifier=rrdp-sync
+            NoNewPrivileges=true
+      register: sync_quadlet
+      notify:
+        - Reload systemd daemon
+        - Re-run changed quadlet services
 
     - name: Host-local quadlet drop-ins/alerts
       when: dropin_host in [inventory_hostname, ansible_facts.get('fqdn', '')]
       block:
+        # The drop-in (`systemd/local/rrdp-sync.container.d/50-healthcheck.conf`) looks like this:
+        # [Service]
+        # ExecStartPre=-/usr/bin/curl -sS -m 10 --retry 5 [url before task starts]
+        # ExecStopPost=-/usr/bin/curl -sS -m 10 --retry 5 [completion url]/${EXIT_STATUS}
         - name: Look for host-local quadlet drop-ins
           ansible.builtin.stat:
             path: "{{ playbook_dir }}/systemd/local"
@@ -109,3 +180,12 @@
     - name: Reload systemd daemon
       ansible.builtin.systemd:
         daemon_reload: true
+
+    # Re-run only changed Quadlets.
+    - name: Re-run changed quadlet services
+      ansible.builtin.systemd_service:
+        name: "{{ item }}"
+        state: started
+      loop: >-
+        {{ (['rrdp-import.service'] if import_quadlet is changed else [])
+         + (['rrdp-sync.service'] if sync_quadlet is changed else []) }}

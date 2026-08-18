@@ -135,27 +135,19 @@ This starts the container and removes it immediately after running. This means
 you do not need to setup a (modern) python development environment to run this
 tool.
 
-To run it:
-
-  * Copy the quadlet files from `systemd` to `/etc/containers/systemd/`.
-  * Update the image hash in `rrdp-tools.image` to the latest hash, or use
-    `:latest`.
-  * Move the files to the correct location and reload systemd so they are
-    loaded:
-```
-mkdir -p /etc/containers/systemd/
-cp systemd/*.container systemd/*.image systemd/*.timer /etc/containers/systemd/
-systemctl daemon-reload
-```
-
+To run it, use ansible to create and deploy the configuration.
 Or use ansible:
 ```
 # in-line inventory, trailing comma is required
 ansible-playbook -i [fqdn], deploy.yml
 ```
 
-This should produce `rrdp-import.service`/`rrdp-sync.service`. The systemd timer
-makes sure that the containers are created (and removed after they run) periodically.
+This will create quadlet files in `/etc/containers/systemd/`, as well as a
+`rrdp-tools.image` file with the latest container hash.
+
+After the run `rrdp-import.service`/`rrdp-sync.service` should exist. The
+systemd timer makes sure that the containers are created (and removed after they
+run) periodically.
 
 The services are one-shot services that remove the container after it exits.
 
