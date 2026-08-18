@@ -5,7 +5,7 @@ Description=Import rpki-client metrics and generate RRDP sync config
 Image=rrdp-tools.image
 LogDriver=passthrough
 # Write repositories and their log below /data/YYYY/MM.
-Exec=sync-rrdp import-from-metrics --base-dir /data --shard year-month --log-to-file --user-agent "OpenBSD rpki-client" -o /data/rrdp_sync.toml /metrics
+Exec=sync-rrdp import-from-metrics --base-dir /data --shard year-month --log-to-file --request-timeout 45 --user-agent "OpenBSD rpki-client" -o /data/rrdp_sync.toml /metrics
 Volume=/var/lib/rpki-client/metrics:/metrics:ro
 Volume=/data:/data
 Network=none
