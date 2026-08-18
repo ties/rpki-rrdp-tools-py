@@ -64,7 +64,10 @@
       loop:
         - rrdp-import.container
         - rrdp-sync.container
-      notify: Reload systemd daemon
+      register: quadlet_units
+      notify:
+        - Reload systemd daemon
+        - Re-run changed quadlet services
 
     - name: Host-local quadlet drop-ins/alerts
       when: dropin_host in [inventory_hostname, ansible_facts.get('fqdn', '')]
@@ -109,3 +112,13 @@
     - name: Reload systemd daemon
       ansible.builtin.systemd:
         daemon_reload: true
+
+    # Handlers take no parameters: derive the service name from the
+    # registered loop results of the quadlet copy task instead.
+    - name: Re-run changed quadlet services
+      ansible.builtin.systemd_service:
+        name: "{{ item.item | regex_replace('\\.container$', '.service') }}"
+        state: started
+      loop: "{{ quadlet_units.results | select('changed') | list }}"
+      loop_control:
+        label: "{{ item.item }}"
