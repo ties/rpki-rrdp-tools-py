@@ -1,5 +1,10 @@
 # Changelog
 
+## main
+
+  * Use ansible podman support to manage containers
+  * 45s timeout for container
+
 ## v0.5.0:
   * Recognisable user-agent, which is configurable for RRDP sync.
   * Add optional UTC year/month output sharding and daily file logging.
