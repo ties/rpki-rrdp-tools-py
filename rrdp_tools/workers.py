@@ -6,7 +6,7 @@ T = TypeVar("T")
 R = TypeVar("R")
 
 
-async def run_workers(
+async def run_workers(  # noqa: UP047
     items: Iterable[T],
     process: Callable[[T], Awaitable[R]],
     workers: int,
