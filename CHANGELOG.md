@@ -4,6 +4,7 @@
 
   * Use ansible podman support to manage containers
   * 45s timeout for container
+  * Pin GitHub Actions to commit hashes
 
 ## v0.5.0:
   * Recognisable user-agent, which is configurable for RRDP sync.
