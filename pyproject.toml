@@ -22,9 +22,6 @@ rrdp-tools = "rrdp_tools.cli:cli"
 
 [dependency-groups]
 dev = [
-  "jupyterlab>=4.5.10",
-  "pandas>=2.0.1",
-  "tabulate>=0.9.0",
   "pytest>=9.0.3",
   "flake8>=6.1.0",
   "pytest-asyncio>=0.21.1",
