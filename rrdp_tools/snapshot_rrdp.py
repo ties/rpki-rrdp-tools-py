@@ -10,7 +10,12 @@ from pathlib import Path
 import aiohttp
 import click
 
-from .http_client import client_session
+from .http_client import (
+    client_session,
+    read_error_body,
+    read_limited,
+    write_limited,
+)
 from .logging_config import LOG_LEVELS, configure_logging
 from .rrdp import parse_notification_file
 
@@ -88,21 +93,24 @@ async def get_and_check(
         t0 = time.time()
         res = await session.get(uri)
         if res.status != 200:
-            reason = await res.read()
+            reason = await read_error_body(res)
             LOG.error("HTTP %d for %s: %s", res.status, uri, reason)
             raise ValueError(f"HTTP {res.status} for {uri}")
-        content = await res.read()
-        LOG.debug("%s %.2f %db", uri, time.time() - t0, len(content))
+        # Stream to a temporary file, only keep it if the hash matches.
+        tmp_file = target_file.with_name(target_file.name + ".tmp")
+        try:
+            with tmp_file.open("wb") as f:
+                digest, size = await write_limited(res, f)
+            LOG.debug("%s %.2f %db", uri, time.time() - t0, size)
 
-        digest = hashlib.sha256(content).hexdigest()
+            if digest != expected_hash:
+                raise ValueError(
+                    f"Hash mismatch for {uri}. Expected {expected_hash} actual {digest}"
+                )
+            os.replace(tmp_file, target_file)
+        finally:
+            tmp_file.unlink(missing_ok=True)
 
-        if digest != expected_hash:
-            raise ValueError(
-                f"Hash mismatch for {uri}. Expected {expected_hash} actual {digest}"
-            )
-
-    with target_file.open("wb") as f:
-        f.write(content)
     set_time_from_headers(res, target_file)
     return True
 
@@ -133,11 +141,13 @@ async def snapshot_rrdp(
                 "HTTP %d from RRDP server for %s, aborting: %s",
                 res.status,
                 notification_url,
-                await res.text(),
+                await read_error_body(res),
             )
             return
 
-        notification = parse_notification_file(await res.text())
+        # Parsed as a whole, so collect the chunks.
+        notification_content = b"".join([chunk async for chunk in read_limited(res)])
+        notification = parse_notification_file(notification_content.decode("utf-8"))
 
         LOG.info(
             "%s serial=%s session_id=%s",
@@ -156,7 +166,6 @@ async def snapshot_rrdp(
             output_path.mkdir(parents=True, exist_ok=True)
 
         # Document is valid, store notification
-        notification_content = await res.read()
         if store_notification:
             if include_hash:
                 notification_hash = hashlib.sha256(notification_content).hexdigest()

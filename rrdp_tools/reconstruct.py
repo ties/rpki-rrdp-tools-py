@@ -4,6 +4,7 @@ import io
 import logging
 import os
 import re
+import tempfile
 import urllib.parse
 from collections import defaultdict
 from datetime import datetime
@@ -14,7 +15,11 @@ import click
 
 from rrdp_tools.rpki import parse_file_time
 
-from .http_client import client_session
+from .http_client import (
+    client_session,
+    read_limited,
+    write_limited,
+)
 from .logging_config import LOG_LEVELS, configure_logging
 from .rrdp import (
     PublishElement,
@@ -33,7 +38,9 @@ async def http_get_delta_or_snapshot(uri: str) -> TextIO:
         response = await session.get(uri)
         assert response.status == 200
 
-        notification = parse_notification_file(await response.text())
+        notification = parse_notification_file(
+            b"".join([chunk async for chunk in read_limited(response)]).decode("utf-8")
+        )
         uri = notification.snapshot.uri
 
         LOG.info(
@@ -45,18 +52,24 @@ async def http_get_delta_or_snapshot(uri: str) -> TextIO:
         response = await session.get(uri)
         assert response.status == 200
 
-        content = await response.content.read()
+        # Stream to an anonymous temporary file instead of holding it in memory.
+        # Returned open to the caller, closed below on failure.
+        snapshot_file = tempfile.TemporaryFile()  # noqa: SIM115
+        try:
+            digest, size = await write_limited(response, snapshot_file)
+            if digest != notification.snapshot.hash:
+                raise ValueError(
+                    "Hash mismatch for snapshot: %s != %s (expected)",
+                    digest,
+                    notification.snapshot.hash,
+                )
+        except BaseException:
+            snapshot_file.close()
+            raise
 
-        digest = hashlib.sha256(content).hexdigest()
-        if digest != notification.snapshot.hash:
-            raise ValueError(
-                "Hash mismatch for snapshot: %s != %s (expected)",
-                digest,
-                notification.snapshot.hash,
-            )
-
-        LOG.info("%s has a size of %ib", uri, len(content))
-        return io.StringIO(content.decode("utf-8"))
+        LOG.info("%s has a size of %ib", uri, size)
+        snapshot_file.seek(0)
+        return io.TextIOWrapper(snapshot_file, encoding="utf-8")
 
 
 def reconstruct_repo(

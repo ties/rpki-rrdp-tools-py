@@ -1,6 +1,23 @@
-import pytest
+import gzip
+import hashlib
+import io
 
-from rrdp_tools.http_client import client_session, default_user_agent
+import pytest
+import pytest_asyncio
+from aiohttp import web
+from aiohttp.test_utils import TestServer
+
+from rrdp_tools.http_client import (
+    CHUNK_SIZE,
+    MAX_CONTENTLEN,
+    MAX_ERROR_BODY_SIZE,
+    ResponseTooLargeError,
+    client_session,
+    default_user_agent,
+    read_error_body,
+    read_limited,
+    write_limited,
+)
 
 
 def test_default_user_agent():
@@ -36,3 +53,119 @@ async def test_session_timeout(request_timeout, expected_total):
         assert session.timeout.total == expected_total
     finally:
         await session.close()
+
+
+@pytest_asyncio.fixture
+async def server():
+    async def fixed(request: web.Request) -> web.Response:
+        return web.Response(body=b"x" * 100)
+
+    async def chunked(request: web.Request) -> web.StreamResponse:
+        # No Content-Length: only the streamed byte count can stop it.
+        response = web.StreamResponse()
+        response.enable_chunked_encoding()
+        await response.prepare(request)
+        for _ in range(10):
+            await response.write(b"x" * 100)
+        await response.write_eof()
+        return response
+
+    async def gzipped(request: web.Request) -> web.Response:
+        # Small on the wire, 1000 bytes once decompressed.
+        return web.Response(
+            body=gzip.compress(b"x" * 1000), headers={"Content-Encoding": "gzip"}
+        )
+
+    async def large(request: web.Request) -> web.StreamResponse:
+        response = web.StreamResponse()
+        response.enable_chunked_encoding()
+        await response.prepare(request)
+        for _ in range(10):
+            await response.write(b"x" * CHUNK_SIZE)
+        await response.write_eof()
+        return response
+
+    async def error(request: web.Request) -> web.Response:
+        return web.Response(status=500, body=b"e" * 10_000)
+
+    app = web.Application()
+    app.router.add_get("/fixed", fixed)
+    app.router.add_get("/chunked", chunked)
+    app.router.add_get("/gzipped", gzipped)
+    app.router.add_get("/large", large)
+    app.router.add_get("/error", error)
+
+    async with TestServer(app) as test_server:
+        yield test_server
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "path, size", [("/fixed", 100), ("/chunked", 1000), ("/gzipped", 1000)]
+)
+async def test_read_limited_within_limit(server, path, size):
+    async with client_session() as session, session.get(server.make_url(path)) as res:
+        chunks = [chunk async for chunk in read_limited(res, max_size=size)]
+        assert b"".join(chunks) == b"x" * size
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "path, match",
+    [
+        ("/fixed", "Content-Length 100 exceeds"),
+        ("/chunked", "body exceeds"),
+        ("/gzipped", "body exceeds"),
+    ],
+)
+async def test_read_limited_too_large(server, path, match):
+    async with client_session() as session, session.get(server.make_url(path)) as res:
+        with pytest.raises(ResponseTooLargeError, match=match):
+            async for _ in read_limited(res, max_size=99):
+                pass
+
+
+@pytest.mark.asyncio
+async def test_read_limited_yields_before_limit(server):
+    max_size = 3 * CHUNK_SIZE
+    chunks = []
+    async with (
+        client_session() as session,
+        session.get(server.make_url("/large")) as res,
+    ):
+        with pytest.raises(ResponseTooLargeError, match="body exceeds"):
+            async for chunk in read_limited(res, max_size=max_size):
+                chunks.append(len(chunk))
+
+    # Chunks are passed on as they arrive, at most CHUNK_SIZE each, and
+    # never beyond the limit.
+    assert chunks
+    assert max(chunks) <= CHUNK_SIZE
+    assert sum(chunks) <= max_size
+
+
+@pytest.mark.asyncio
+async def test_write_limited(server):
+    f = io.BytesIO()
+    async with (
+        client_session() as session,
+        session.get(server.make_url("/gzipped")) as res,
+    ):
+        digest, size = await write_limited(res, f)
+
+    assert f.getvalue() == b"x" * 1000
+    assert size == 1000
+    assert digest == hashlib.sha256(b"x" * 1000).hexdigest()
+
+
+@pytest.mark.asyncio
+async def test_read_error_body_is_truncated(server):
+    async with (
+        client_session() as session,
+        session.get(server.make_url("/error")) as res,
+    ):
+        assert await read_error_body(res) == "e" * MAX_ERROR_BODY_SIZE
+
+
+def test_max_contentlen_matches_rpki_client():
+    assert MAX_CONTENTLEN == 2 * 1024 * 1024 * 1024

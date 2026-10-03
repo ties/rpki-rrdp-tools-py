@@ -9,7 +9,7 @@ from pathlib import Path
 import aiohttp
 import click
 
-from .http_client import client_session
+from .http_client import client_session, write_limited
 from .logging_config import LOG_LEVELS, configure_logging
 
 LOG = logging.getLogger(__name__)
@@ -28,8 +28,8 @@ async def get_and_check(
     async with session.get(download.uri) as response:
         LOG.debug("[%d] HTTP %d %.3fs", i, response.status, time.time() - t0)
         if response.status == 200:
-            body = await response.read()
-            await asyncio.to_thread(download.target_file.write_bytes, body)
+            with download.target_file.open("wb") as f:
+                await write_limited(response, f)
             LOG.info(
                 "[%d] Downloaded %s to %s in %.3fs",
                 i,
