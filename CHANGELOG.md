@@ -10,6 +10,7 @@
   * Reject RRDP object URIs that resolve outside the reconstruct output directory (publish and withdraw)
   * Limit HTTP response bodies to 2 GiB (decompressed), as MAX_CONTENTLEN in rpki-client
   * Stream snapshot and delta downloads to disk instead of buffering them in memory
+  * Only follow same-origin redirects, and require snapshot/delta URIs on the notification's origin (as rpki-client)
 
 ## v0.5.0:
   * Recognisable user-agent, which is configurable for RRDP sync.

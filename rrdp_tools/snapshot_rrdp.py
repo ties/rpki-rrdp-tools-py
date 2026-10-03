@@ -11,9 +11,12 @@ import aiohttp
 import click
 
 from .http_client import (
+    CrossOriginError,
     client_session,
     read_error_body,
     read_limited,
+    restrict_origin,
+    same_origin,
     write_limited,
 )
 from .logging_config import LOG_LEVELS, configure_logging
@@ -91,7 +94,8 @@ async def get_and_check(
         LOG.debug("Getting %s h=%s target_file=%s", uri, expected_hash, target_file)
 
         t0 = time.time()
-        res = await session.get(uri)
+        # Redirects stay in the origin of the (overridden) URI.
+        res = await session.get(uri, middlewares=(restrict_origin(uri),))
         if res.status != 200:
             reason = await read_error_body(res)
             LOG.error("HTTP %d for %s: %s", res.status, uri, reason)
@@ -135,7 +139,9 @@ async def snapshot_rrdp(
         session = client_session()
     try:
         LOG.debug("GET %s", notification_url)
-        res = await session.get(notification_url)
+        res = await session.get(
+            notification_url, middlewares=(restrict_origin(notification_url),)
+        )
         if res.status != 200:
             LOG.error(
                 "HTTP %d from RRDP server for %s, aborting: %s",
@@ -160,6 +166,17 @@ async def snapshot_rrdp(
             raise ValueError(
                 f"No session_id in notification file for {notification_url}"
             )
+
+        deltas = notification.deltas[:limit_deltas]
+        # As rpki-client: files must be in the origin of the notification.
+        uris = [delta.uri for delta in deltas]
+        if not skip_snapshot:
+            uris.append(notification.snapshot.uri)
+        for uri in uris:
+            if not same_origin(uri, notification_url):
+                raise CrossOriginError(
+                    f"{uri} in {notification_url} is not in the origin of the notification"
+                )
 
         if include_session:
             output_path = output_path / notification.session_id
@@ -200,9 +217,7 @@ async def snapshot_rrdp(
                 )
             )
 
-        for idx, delta in enumerate(notification.deltas):
-            if limit_deltas is not None and idx >= limit_deltas:
-                break
+        for delta in deltas:
             file_name = f"{delta.serial}.xml"
             queue.append(
                 get_and_check(

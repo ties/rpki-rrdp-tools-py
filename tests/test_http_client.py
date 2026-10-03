@@ -11,11 +11,14 @@ from rrdp_tools.http_client import (
     CHUNK_SIZE,
     MAX_CONTENTLEN,
     MAX_ERROR_BODY_SIZE,
+    CrossOriginError,
     ResponseTooLargeError,
     client_session,
     default_user_agent,
     read_error_body,
     read_limited,
+    restrict_origin,
+    same_origin,
     write_limited,
 )
 
@@ -88,7 +91,11 @@ async def server():
     async def error(request: web.Request) -> web.Response:
         return web.Response(status=500, body=b"e" * 10_000)
 
+    async def redirect(request: web.Request) -> web.Response:
+        raise web.HTTPFound(request.query["to"])
+
     app = web.Application()
+    app.router.add_get("/redirect", redirect)
     app.router.add_get("/fixed", fixed)
     app.router.add_get("/chunked", chunked)
     app.router.add_get("/gzipped", gzipped)
@@ -169,3 +176,61 @@ async def test_read_error_body_is_truncated(server):
 
 def test_max_contentlen_matches_rpki_client():
     assert MAX_CONTENTLEN == 2 * 1024 * 1024 * 1024
+
+
+@pytest.mark.parametrize(
+    "a, b, expected",
+    [
+        ("https://rrdp.example.org/n.xml", "https://rrdp.example.org/s/1.xml", True),
+        ("https://RRDP.example.org/n.xml", "https://rrdp.example.org/", True),
+        ("https://rrdp.example.org:443/n.xml", "https://rrdp.example.org/", True),
+        ("http://rrdp.example.org:80/n.xml", "http://rrdp.example.org/", True),
+        ("https://rrdp.example.org/n.xml", "http://rrdp.example.org/n.xml", False),
+        ("https://rrdp.example.org/n.xml", "https://rrdp.example.org:8443/", False),
+        ("https://rrdp.example.org/n.xml", "https://example.org/n.xml", False),
+        ("https://rrdp.example.org/n.xml", "https://rrdp.example.org.evil/", False),
+    ],
+)
+def test_same_origin(a, b, expected):
+    assert same_origin(a, b) is expected
+    assert same_origin(b, a) is expected
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("absolute", [True, False])
+async def test_restrict_origin_follows_same_origin_redirect(server, absolute):
+    target = server.make_url("/fixed") if absolute else "/fixed"
+    url = server.make_url("/redirect").with_query(to=str(target))
+
+    async with (
+        client_session() as session,
+        session.get(url, middlewares=(restrict_origin(url),)) as res,
+    ):
+        assert res.status == 200
+        assert res.url == server.make_url("/fixed")
+        assert len(res.history) == 1
+
+
+@pytest.mark.asyncio
+async def test_restrict_origin_rejects_cross_origin_redirect(server, other_origin):
+    url = server.make_url("/redirect").with_query(
+        to=str(other_origin.make_url("/secret"))
+    )
+
+    async with client_session() as session:
+        with pytest.raises(CrossOriginError, match="not in the origin"):
+            await session.get(url, middlewares=(restrict_origin(url),))
+
+    assert other_origin.requests == []
+
+
+@pytest.mark.asyncio
+async def test_restrict_origin_rejects_initial_request(server, other_origin):
+    async with client_session() as session:
+        with pytest.raises(CrossOriginError):
+            await session.get(
+                other_origin.make_url("/secret"),
+                middlewares=(restrict_origin(server.make_url("/")),),
+            )
+
+    assert other_origin.requests == []

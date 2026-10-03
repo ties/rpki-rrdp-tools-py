@@ -4,6 +4,8 @@ from collections.abc import AsyncIterator
 from typing import BinaryIO
 
 import aiohttp
+from aiohttp import ClientHandlerType, ClientMiddlewareType, ClientRequest
+from yarl import URL
 
 DEFAULT_REQUEST_TIMEOUT = 60
 
@@ -17,6 +19,37 @@ MAX_ERROR_BODY_SIZE = 1024
 
 class ResponseTooLargeError(ValueError):
     pass
+
+
+class CrossOriginError(ValueError):
+    pass
+
+
+def same_origin(a: str | URL, b: str | URL) -> bool:
+    """Whether two URLs have the same scheme, host and (effective) port.
+
+    As valid_origin in rpki-client. Compares the parts rather than
+    URL.origin(), which treats an explicit default port as different.
+    """
+    a, b = URL(a), URL(b)
+    return (a.scheme, a.host, a.port) == (b.scheme, b.host, b.port)
+
+
+def restrict_origin(url: str | URL) -> ClientMiddlewareType:
+    """Client middleware that rejects requests outside the origin of `url`.
+
+    Middlewares run for every request in a redirect chain, so this also
+    rejects cross-origin redirects before they are followed.
+    """
+
+    async def middleware(
+        req: ClientRequest, handler: ClientHandlerType
+    ) -> aiohttp.ClientResponse:
+        if not same_origin(req.url, url):
+            raise CrossOriginError(f"{req.url} is not in the origin of {url}")
+        return await handler(req)
+
+    return middleware
 
 
 def default_user_agent() -> str:

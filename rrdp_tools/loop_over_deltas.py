@@ -9,7 +9,7 @@ from pathlib import Path
 import aiohttp
 import click
 
-from .http_client import client_session, write_limited
+from .http_client import client_session, restrict_origin, write_limited
 from .logging_config import LOG_LEVELS, configure_logging
 
 LOG = logging.getLogger(__name__)
@@ -25,7 +25,9 @@ async def get_and_check(
     i: int, session: aiohttp.ClientSession, download: Download
 ) -> None:
     t0 = time.time()
-    async with session.get(download.uri) as response:
+    async with session.get(
+        download.uri, middlewares=(restrict_origin(download.uri),)
+    ) as response:
         LOG.debug("[%d] HTTP %d %.3fs", i, response.status, time.time() - t0)
         if response.status == 200:
             with download.target_file.open("wb") as f:

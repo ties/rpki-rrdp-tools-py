@@ -7,6 +7,7 @@ import pytest_asyncio
 from aiohttp import web
 from aiohttp.test_utils import TestServer
 
+from rrdp_tools.http_client import CrossOriginError
 from rrdp_tools.reconstruct import (
     http_get_delta_or_snapshot,
     output_file_path,
@@ -22,10 +23,13 @@ async def rrdp_server():
     snapshot_hash = hashlib.sha256(SNAPSHOT).hexdigest()
 
     async def notification(request: web.Request) -> web.Response:
+        snapshot_uri = request.query.get(
+            "snapshot", str(request.url.with_path("/snapshot.xml"))
+        )
         body = (
             '<notification xmlns="http://www.ripe.net/rpki/rrdp" version="1"'
             ' session_id="1c33ba5d-4e16-448d-9a22-b12599ef1cba" serial="46832">'
-            f'<snapshot uri="{request.url.with_path("/snapshot.xml")}"'
+            f'<snapshot uri="{snapshot_uri}"'
             f' hash="{request.query.get("hash", snapshot_hash)}"/>'
             "</notification>"
         )
@@ -59,6 +63,17 @@ async def test_http_get_snapshot_hash_mismatch(rrdp_server) -> None:
         await http_get_delta_or_snapshot(
             str(rrdp_server.make_url("/notification.xml").with_query(hash="00" * 32))
         )
+
+
+@pytest.mark.asyncio
+async def test_http_get_snapshot_cross_origin(rrdp_server, other_origin) -> None:
+    url = rrdp_server.make_url("/notification.xml").with_query(
+        snapshot=str(other_origin.make_url("/snapshot.xml"))
+    )
+    with pytest.raises(CrossOriginError, match="not in the origin"):
+        await http_get_delta_or_snapshot(str(url))
+
+    assert other_origin.requests == []
 
 
 def test_reconstruct(tmp_path: pathlib.Path, caplog: pytest.LogCaptureFixture) -> None:

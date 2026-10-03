@@ -16,8 +16,11 @@ import click
 from rrdp_tools.rpki import parse_file_time
 
 from .http_client import (
+    CrossOriginError,
     client_session,
     read_limited,
+    restrict_origin,
+    same_origin,
     write_limited,
 )
 from .logging_config import LOG_LEVELS, configure_logging
@@ -35,13 +38,13 @@ LOG = logging.getLogger(__name__)
 async def http_get_delta_or_snapshot(uri: str) -> TextIO:
     LOG.info("Downloading from %s", uri)
     async with client_session() as session:
-        response = await session.get(uri)
+        response = await session.get(uri, middlewares=(restrict_origin(uri),))
         assert response.status == 200
 
         notification = parse_notification_file(
             b"".join([chunk async for chunk in read_limited(response)]).decode("utf-8")
         )
-        uri = notification.snapshot.uri
+        notification_uri, uri = uri, notification.snapshot.uri
 
         LOG.info(
             "found notification.xml for serial %d with snapshot at %s",
@@ -49,7 +52,13 @@ async def http_get_delta_or_snapshot(uri: str) -> TextIO:
             uri,
         )
 
-        response = await session.get(uri)
+        # As rpki-client: the snapshot must be in the origin of the notification.
+        if not same_origin(uri, notification_uri):
+            raise CrossOriginError(
+                f"snapshot {uri} is not in the origin of {notification_uri}"
+            )
+
+        response = await session.get(uri, middlewares=(restrict_origin(uri),))
         assert response.status == 200
 
         # Stream to an anonymous temporary file instead of holding it in memory.
