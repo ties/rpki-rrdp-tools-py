@@ -123,10 +123,23 @@ def reconstruct_repo(
     )
 
 
+def output_file_path(output_path: Path, uri: str) -> Path:
+    """Map the path of an RRDP object URI to a file below `output_path`.
+
+    The path is resolved (`..`, symlinks) before checking, so it can not
+    escape `output_path`. Raises ValueError if it does.
+    """
+    root = output_path.resolve()
+    file_path = (root / f"./{urllib.parse.urlparse(uri).path}").resolve()
+    if root not in file_path.parents:
+        raise ValueError(f"{uri!r} resolves to {file_path}, outside of {root}")
+    return file_path
+
+
 def handle_withdraw_element(
     output_path, verify_only, elem: WithdrawElement, effective_uri
 ):
-    file_path = output_path / f"./{urllib.parse.urlparse(effective_uri).path}"
+    file_path = output_file_path(output_path, effective_uri)
     if file_path.exists():
         h_disk = hashlib.sha256(file_path.read_bytes()).hexdigest()
 
@@ -148,10 +161,7 @@ def handle_withdraw_element(
 def handle_publish_element(
     output_path, verify_only, parse_for_time, elem: PublishElement, effective_uri
 ):
-    tokens = urllib.parse.urlparse(effective_uri)
-    file_path = output_path / f"./{tokens.path}"
-    # Ensure that output dir is a subdirectory and create if necessary
-    assert output_path in file_path.parents
+    file_path = output_file_path(output_path, effective_uri)
 
     # publish with hash -> overwrite, check old hash
     if elem.previous_hash:

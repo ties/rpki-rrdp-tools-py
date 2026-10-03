@@ -3,7 +3,7 @@ import pathlib
 
 import pytest
 
-from rrdp_tools.reconstruct import reconstruct_repo
+from rrdp_tools.reconstruct import output_file_path, reconstruct_repo
 
 
 def test_reconstruct(tmp_path: pathlib.Path, caplog: pytest.LogCaptureFixture) -> None:
@@ -35,3 +35,61 @@ def test_reconstruct_filter(
     # there are no certificates -> no files in the directory
     files = list(tmp_path.rglob("*"))
     assert len(files) == 0
+
+
+@pytest.mark.parametrize(
+    "uri, expected",
+    [
+        ("rsync://rpki.example.org/repo/a.roa", "repo/a.roa"),
+        ("rsync://rpki.example.org/repo/ca/sub/b.mft", "repo/ca/sub/b.mft"),
+        ("rsync://rpki.example.org//repo/a.roa", "repo/a.roa"),
+        ("rsync://rpki.example.org/repo/x/../a.roa", "repo/a.roa"),
+        ("rsync://rpki.example.org/repo/a.roa-0123abcd", "repo/a.roa-0123abcd"),
+    ],
+)
+def test_output_file_path_inside(tmp_path: pathlib.Path, uri: str, expected: str):
+    assert output_file_path(tmp_path, uri) == tmp_path.resolve() / expected
+
+
+@pytest.mark.parametrize(
+    "uri",
+    [
+        "rsync://rpki.example.org/../victim",
+        "rsync://rpki.example.org/repo/../../victim",
+        "rsync://rpki.example.org//../../victim",
+        "rsync://rpki.example.org/repo/a/../../../victim",
+        # the output directory itself is not a file below it
+        "rsync://rpki.example.org/",
+        "rsync://rpki.example.org/repo/..",
+    ],
+)
+def test_output_file_path_traversal(tmp_path: pathlib.Path, uri: str):
+    output = tmp_path / "output"
+    output.mkdir()
+
+    with pytest.raises(ValueError, match="outside of"):
+        output_file_path(output, uri)
+
+
+def test_output_file_path_symlink_escape(tmp_path: pathlib.Path):
+    output = tmp_path / "output"
+    outside = tmp_path / "outside"
+    output.mkdir()
+    outside.mkdir()
+    (output / "repo").symlink_to(outside)
+
+    with pytest.raises(ValueError, match="outside of"):
+        output_file_path(output, "rsync://rpki.example.org/repo/a.roa")
+
+
+def test_output_file_path_relative_output_dir(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.chdir(tmp_path)
+
+    assert (
+        output_file_path(pathlib.Path("."), "rsync://rpki.example.org/repo/a.roa")
+        == tmp_path.resolve() / "repo/a.roa"
+    )
+    with pytest.raises(ValueError, match="outside of"):
+        output_file_path(pathlib.Path("."), "rsync://rpki.example.org/../a.roa")

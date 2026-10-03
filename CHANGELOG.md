@@ -7,6 +7,7 @@
   * Pin GitHub Actions to commit hashes
   * Validate snapshot hash when reconstruct downloads a notification URL
   * Read and write sync config with tomlkit (fixes unescaped strings in generated config); validate generated config before replacing the existing one
+  * Reject RRDP object URIs that resolve outside the reconstruct output directory (publish and withdraw)
 
 ## v0.5.0:
   * Recognisable user-agent, which is configurable for RRDP sync.
