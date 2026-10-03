@@ -45,10 +45,18 @@ async def http_get_delta_or_snapshot(uri: str) -> TextIO:
         response = await session.get(uri)
         assert response.status == 200
 
-        text = await response.text()
+        content = await response.content.read()
 
-        LOG.info("%s has a size of %ib", uri, len(text))
-        return io.StringIO(text)
+        digest = hashlib.sha256(content).hexdigest()
+        if digest != notification.snapshot.hash:
+            raise ValueError(
+                "Hash mismatch for snapshot: %s != %s (expected)",
+                digest,
+                notification.snapshot.hash,
+            )
+
+        LOG.info("%s has a size of %ib", uri, len(content))
+        return io.StringIO(content.decode("utf-8"))
 
 
 def reconstruct_repo(

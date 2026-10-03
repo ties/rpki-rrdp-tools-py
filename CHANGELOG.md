@@ -5,6 +5,7 @@
   * Use ansible podman support to manage containers
   * 45s timeout for container
   * Pin GitHub Actions to commit hashes
+  * Validate snapshot hash when reconstruct downloads a notification URL
 
 ## v0.5.0:
   * Recognisable user-agent, which is configurable for RRDP sync.
