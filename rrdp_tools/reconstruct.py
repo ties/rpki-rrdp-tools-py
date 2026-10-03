@@ -16,6 +16,7 @@ import click
 from rrdp_tools.rpki import parse_file_time
 
 from .http_client import (
+    MAX_NOTIFICATION_SIZE,
     CrossOriginError,
     client_session,
     read_limited,
@@ -41,9 +42,10 @@ async def http_get_delta_or_snapshot(uri: str) -> TextIO:
         response = await session.get(uri, middlewares=(restrict_origin(uri),))
         assert response.status == 200
 
-        notification = parse_notification_file(
-            b"".join([chunk async for chunk in read_limited(response)]).decode("utf-8")
+        notification_content = b"".join(
+            [chunk async for chunk in read_limited(response, MAX_NOTIFICATION_SIZE)]
         )
+        notification = parse_notification_file(notification_content.decode("utf-8"))
         notification_uri, uri = uri, notification.snapshot.uri
 
         LOG.info(

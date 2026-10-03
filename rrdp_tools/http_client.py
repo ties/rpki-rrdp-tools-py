@@ -12,6 +12,9 @@ DEFAULT_REQUEST_TIMEOUT = 60
 # Maximum (decompressed) response body size, as MAX_CONTENTLEN in rpki-client's
 # http.c.
 MAX_CONTENTLEN = 2 * 1024**3
+# Notifications are parsed in memory (rpki-client streams them instead). A few
+# MB of delta URLs is fine; larger notifications are not plausible.
+MAX_NOTIFICATION_SIZE = 16 * 1024**2
 CHUNK_SIZE = 64 * 1024
 # Error bodies are only logged.
 MAX_ERROR_BODY_SIZE = 1024

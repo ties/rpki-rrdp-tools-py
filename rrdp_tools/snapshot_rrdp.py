@@ -11,6 +11,7 @@ import aiohttp
 import click
 
 from .http_client import (
+    MAX_NOTIFICATION_SIZE,
     CrossOriginError,
     client_session,
     read_error_body,
@@ -21,6 +22,7 @@ from .http_client import (
 )
 from .logging_config import LOG_LEVELS, configure_logging
 from .rrdp import parse_notification_file
+from .workers import run_workers
 
 LOG = logging.getLogger(__name__)
 
@@ -152,7 +154,9 @@ async def snapshot_rrdp(
             return
 
         # Parsed as a whole, so collect the chunks.
-        notification_content = b"".join([chunk async for chunk in read_limited(res)])
+        notification_content = b"".join(
+            [chunk async for chunk in read_limited(res, MAX_NOTIFICATION_SIZE)]
+        )
         notification = parse_notification_file(notification_content.decode("utf-8"))
 
         LOG.info(
@@ -167,6 +171,8 @@ async def snapshot_rrdp(
                 f"No session_id in notification file for {notification_url}"
             )
 
+        # Fetch all deltas (unlike rpki-client's MAX_RRDP_DELTAS window): we
+        # archive the full repository state. See DESIGN.md.
         deltas = notification.deltas[:limit_deltas]
         # As rpki-client: files must be in the origin of the notification.
         uris = [delta.uri for delta in deltas]
@@ -200,45 +206,47 @@ async def snapshot_rrdp(
             f.write(notification_content)
         set_time_from_headers(res, notification_file)
 
-        queue = []
-
+        # (file name, uri, hash); a fixed number of workers fetch these, so a
+        # notification with many deltas does not create a task per file.
+        files = [(f"{delta.serial}.xml", delta.uri, delta.hash) for delta in deltas]
         if not skip_snapshot:
-            file_name = f"snapshot-{notification.serial}.xml"
-            queue.append(
-                get_and_check(
-                    sem,
-                    session,
-                    output_path,
-                    file_name,
+            files.insert(
+                0,
+                (
+                    f"snapshot-{notification.serial}.xml",
                     notification.snapshot.uri,
                     notification.snapshot.hash,
-                    override_host=override_host,
-                    hash_in_name=include_hash,
-                )
+                ),
             )
 
-        for delta in deltas:
-            file_name = f"{delta.serial}.xml"
-            queue.append(
-                get_and_check(
-                    sem,
-                    session,
-                    output_path,
-                    file_name,
-                    delta.uri,
-                    delta.hash,
-                    override_host=override_host,
-                    hash_in_name=include_hash,
-                )
+        async def fetch(file: tuple[str, str, str]) -> bool:
+            file_name, uri, sha256 = file
+            return await get_and_check(
+                sem,
+                session,
+                output_path,
+                file_name,
+                uri,
+                sha256,
+                override_host=override_host,
+                hash_in_name=include_hash,
             )
 
-        status_per_file = await asyncio.gather(*queue)
+        # Failures do not stop the other files, the repository fails after.
+        downloaded, failures = await run_workers(files, fetch, threads)
+        for (_, uri, _), e in failures:
+            LOG.error("%s: failed to get %s: %s", notification_url, uri, e)
+
         LOG.info(
             "%s: %d files are present. Downloaded %d files.",
             notification_url,
-            len(queue),
-            sum(status_per_file),
+            len(files) - len(failures),
+            sum(downloaded),
         )
+        if failures:
+            raise ValueError(
+                f"{notification_url}: {len(failures)}/{len(files)} files failed"
+            ) from failures[0][1]
     finally:
         if owns_session:
             await session.close()
