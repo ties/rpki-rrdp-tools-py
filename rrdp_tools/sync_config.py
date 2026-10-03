@@ -1,7 +1,8 @@
-import tomllib
 import urllib.parse
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
+
+import tomlkit
 
 from .sharding import Shard
 
@@ -56,7 +57,7 @@ def notification_url_error(url: str) -> str | None:
 
 def load_config(path: Path) -> SyncConfig:
     with open(path, "rb") as f:
-        data = tomllib.load(f)
+        data = tomlkit.load(f).unwrap()
 
     if "base_dir" not in data:
         raise ValueError("Config file must contain 'base_dir'")
@@ -114,36 +115,36 @@ def _is_rir(repo: RepositoryConfig) -> bool:
     )
 
 
-def _format_repo(repo: RepositoryConfig) -> list[str]:
-    lines = ["", "[[repository]]"]
-    lines.append(f'notification_url = "{repo.notification_url}"')
+def _repo_table(repo: RepositoryConfig) -> tomlkit.items.Table:
+    table = tomlkit.table()
+    table["notification_url"] = repo.notification_url
     if repo.name:
-        lines.append(f'name = "{repo.name}"')
+        table["name"] = repo.name
     if not repo.skip_snapshot:
-        lines.append("skip_snapshot = false")
+        table["skip_snapshot"] = False
     if not repo.include_hash:
-        lines.append("include_hash = false")
+        table["include_hash"] = False
     if not repo.store_notification:
-        lines.append("store_notification = false")
+        table["store_notification"] = False
     if repo.limit_deltas is not None:
-        lines.append(f"limit_deltas = {repo.limit_deltas}")
-    return lines
+        table["limit_deltas"] = repo.limit_deltas
+    return table
 
 
 def format_toml(config: SyncConfig) -> str:
-    lines = []
-    lines.append(f"parallel_connections = {config.parallel_connections}")
-    lines.append(f'base_dir = "{config.base_dir}"')
+    doc = tomlkit.document()
+    doc["parallel_connections"] = config.parallel_connections
+    doc["base_dir"] = config.base_dir
     if config.request_timeout is not None:
-        lines.append(f"request_timeout = {config.request_timeout}")
+        doc["request_timeout"] = config.request_timeout
     if config.total_timeout is not None:
-        lines.append(f"total_timeout = {config.total_timeout}")
+        doc["total_timeout"] = config.total_timeout
     if config.user_agent is not None:
-        lines.append(f'user_agent = "{config.user_agent}"')
+        doc["user_agent"] = config.user_agent
     if config.shard is not Shard.NONE:
-        lines.append(f'shard = "{config.shard.value}"')
+        doc["shard"] = config.shard.value
     if config.log_to_file:
-        lines.append("log_to_file = true")
+        doc["log_to_file"] = True
 
     rir_repos = sorted(
         (r for r in config.repositories if _is_rir(r)),
@@ -154,20 +155,23 @@ def format_toml(config: SyncConfig) -> str:
         key=lambda r: r.notification_url,
     )
 
+    repositories = tomlkit.aot()
     for repo in rir_repos:
-        lines.extend(_format_repo(repo))
+        repositories.append(_repo_table(repo))
 
     if rir_repos and other_repos:
-        lines.append("")
-        lines.append("#")
-        lines.append("# Non-RIR repositories:")
-        lines.append("#")
+        # Comments belong to a table, so attach the separator to the last RIR one.
+        last = repositories[-1]
+        last.add(tomlkit.nl())
+        last.add(tomlkit.comment(""))
+        last.add(tomlkit.comment("Non-RIR repositories:"))
+        last.add(tomlkit.comment(""))
 
     for repo in other_repos:
-        lines.extend(_format_repo(repo))
+        repositories.append(_repo_table(repo))
 
-    lines.append("")
-    return "\n".join(lines)
+    doc["repository"] = repositories
+    return tomlkit.dumps(doc)
 
 
 def config_from_notification_urls(

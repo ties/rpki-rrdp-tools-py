@@ -76,6 +76,19 @@ class TestWriteAtomically:
         assert target.read_text() == "old"
         assert list(tmp_path.iterdir()) == [target]
 
+    def test_failed_validation_keeps_existing_content(self, tmp_path):
+        target = tmp_path / "config.toml"
+        target.write_text("old")
+
+        def reject(path):
+            raise ValueError("invalid")
+
+        with pytest.raises(ValueError, match="invalid"):
+            write_atomically(target, "new", validate=reject)
+
+        assert target.read_text() == "old"
+        assert list(tmp_path.iterdir()) == [target]
+
 
 class TestImportCommand:
     def _invoke(self, tmp_path, *args, metrics_content=SAMPLE_METRICS):
@@ -145,6 +158,16 @@ class TestImportCommand:
             "https://rrdp.ripe.net/notification.xml",
             "https://rpki.example.com/rrdp/notification.xml",
         ]
+
+    def test_toml_metacharacters_in_url_round_trip(self, tmp_path):
+        url = "https://example.com/rrdp\\\t\x7f/notification.xml\\"
+        result, output = self._invoke(
+            tmp_path, metrics_content=f'x{{notify="{url}"}} 1\n'
+        )
+
+        assert result.exit_code == 0, result.output
+        config = load_config(output)
+        assert [r.notification_url for r in config.repositories] == [url]
 
     def test_all_urls_unusable(self, tmp_path):
         result, output = self._invoke(

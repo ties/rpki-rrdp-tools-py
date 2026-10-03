@@ -13,6 +13,7 @@ dependencies = [
     "asn1crypto>=1.5.1",
     "asn1tools>=0.167.0",
     "alive-progress>=3.3.0",
+    "tomlkit>=0.15.1",
 ]
 
 [project.scripts]

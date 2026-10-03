@@ -1,6 +1,5 @@
-import tomllib
-
 import pytest
+import tomlkit
 
 from rrdp_tools.sharding import Shard
 from rrdp_tools.sync_config import (
@@ -206,7 +205,7 @@ class TestFormatToml:
         )
 
         toml_str = format_toml(config)
-        parsed = tomllib.loads(toml_str)
+        parsed = tomlkit.loads(toml_str)
 
         assert parsed["parallel_connections"] == 8
         assert parsed["base_dir"] == "/data/rrdp"
@@ -232,7 +231,7 @@ class TestFormatToml:
         )
 
         toml_str = format_toml(config)
-        parsed = tomllib.loads(toml_str)
+        parsed = tomlkit.loads(toml_str)
 
         urls = [r["notification_url"] for r in parsed["repository"]]
         assert urls == [
@@ -291,7 +290,7 @@ class TestFormatToml:
         )
 
         toml_str = format_toml(config)
-        parsed = tomllib.loads(toml_str)
+        parsed = tomlkit.loads(toml_str)
 
         repo = parsed["repository"][0]
         assert repo["skip_snapshot"] is False
@@ -307,8 +306,23 @@ class TestFormatToml:
             ],
         )
 
-        parsed = tomllib.loads(format_toml(config))
+        parsed = tomlkit.loads(format_toml(config))
         assert parsed["user_agent"] == "example-agent/1.0"
+
+    def test_string_fields_are_escaped(self):
+        config = SyncConfig(
+            base_dir='/data\\"x',
+            user_agent="agent\\",
+            repositories=[
+                RepositoryConfig(notification_url="https://x.com/n.xml\\", name='a"b'),
+            ],
+        )
+
+        parsed = tomlkit.loads(format_toml(config))
+        assert parsed["base_dir"] == '/data\\"x'
+        assert parsed["user_agent"] == "agent\\"
+        assert parsed["repository"][0]["notification_url"] == "https://x.com/n.xml\\"
+        assert parsed["repository"][0]["name"] == 'a"b'
 
     def test_user_agent_omitted_when_unset(self):
         config = SyncConfig(
