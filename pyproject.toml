@@ -1,6 +1,6 @@
 [project]
 name = "rrdp-tools"
-version = "0.5.1"
+version = "0.5.2"
 description = ""
 authors = [{name="Ties de Kock", email="ties@tiesdekock.nl"}]
 requires-python = ">=3.11"
