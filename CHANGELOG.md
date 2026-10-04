@@ -7,7 +7,8 @@
   * Pin GitHub Actions to commit hashes
   * Validate snapshot hash when reconstruct downloads a notification URL
   * Read and write sync config with tomlkit (fixes unescaped strings in generated config); validate generated config before replacing the existing one
-  * Reject RRDP object URIs that resolve outside the reconstruct output directory (publish and withdraw)
+  * Reject RRDP object URIs that resolve to a path outside the reconstruct output directory (publish and withdraw).
+    The path injection issue for withdraws was reported in [#66](https://github.com/ties/rpki-rrdp-tools-py/issues/66) by @N0zoM1z0.
   * Limit HTTP response bodies to 2 GiB (decompressed), as MAX_CONTENTLEN in rpki-client
   * Stream snapshot and delta downloads to disk instead of buffering them in memory
   * Only follow same-origin redirects, and require snapshot/delta URIs on the notification's origin (as rpki-client)
