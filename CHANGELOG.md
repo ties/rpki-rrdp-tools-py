@@ -1,6 +1,6 @@
 # Changelog
 
-## main
+## v0.5.1
 
   * Use ansible podman support to manage containers
   * 45s timeout for container
