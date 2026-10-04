@@ -4,6 +4,7 @@ import io
 import logging
 import os
 import re
+import tempfile
 import urllib.parse
 from collections import defaultdict
 from datetime import datetime
@@ -14,7 +15,15 @@ import click
 
 from rrdp_tools.rpki import parse_file_time
 
-from .http_client import client_session
+from .http_client import (
+    MAX_NOTIFICATION_SIZE,
+    CrossOriginError,
+    client_session,
+    read_limited,
+    restrict_origin,
+    same_origin,
+    write_limited,
+)
 from .logging_config import LOG_LEVELS, configure_logging
 from .rrdp import (
     PublishElement,
@@ -30,11 +39,14 @@ LOG = logging.getLogger(__name__)
 async def http_get_delta_or_snapshot(uri: str) -> TextIO:
     LOG.info("Downloading from %s", uri)
     async with client_session() as session:
-        response = await session.get(uri)
+        response = await session.get(uri, middlewares=(restrict_origin(uri),))
         assert response.status == 200
 
-        notification = parse_notification_file(await response.text())
-        uri = notification.snapshot.uri
+        notification_content = b"".join(
+            [chunk async for chunk in read_limited(response, MAX_NOTIFICATION_SIZE)]
+        )
+        notification = parse_notification_file(notification_content.decode("utf-8"))
+        notification_uri, uri = uri, notification.snapshot.uri
 
         LOG.info(
             "found notification.xml for serial %d with snapshot at %s",
@@ -42,13 +54,33 @@ async def http_get_delta_or_snapshot(uri: str) -> TextIO:
             uri,
         )
 
-        response = await session.get(uri)
+        # As rpki-client: the snapshot must be in the origin of the notification.
+        if not same_origin(uri, notification_uri):
+            raise CrossOriginError(
+                f"snapshot {uri} is not in the origin of {notification_uri}"
+            )
+
+        response = await session.get(uri, middlewares=(restrict_origin(uri),))
         assert response.status == 200
 
-        text = await response.text()
+        # Stream to an anonymous temporary file instead of holding it in memory.
+        # Returned open to the caller, closed below on failure.
+        snapshot_file = tempfile.TemporaryFile()  # noqa: SIM115
+        try:
+            digest, size = await write_limited(response, snapshot_file)
+            if digest != notification.snapshot.hash:
+                raise ValueError(
+                    "Hash mismatch for snapshot: %s != %s (expected)",
+                    digest,
+                    notification.snapshot.hash,
+                )
+        except BaseException:
+            snapshot_file.close()
+            raise
 
-        LOG.info("%s has a size of %ib", uri, len(text))
-        return io.StringIO(text)
+        LOG.info("%s has a size of %ib", uri, size)
+        snapshot_file.seek(0)
+        return io.TextIOWrapper(snapshot_file, encoding="utf-8")
 
 
 def reconstruct_repo(
@@ -115,10 +147,23 @@ def reconstruct_repo(
     )
 
 
+def output_file_path(output_path: Path, uri: str) -> Path:
+    """Map the path of an RRDP object URI to a file below `output_path`.
+
+    The path is resolved (`..`, symlinks) before checking, so it can not
+    escape `output_path`. Raises ValueError if it does.
+    """
+    root = output_path.resolve()
+    file_path = (root / f"./{urllib.parse.urlparse(uri).path}").resolve()
+    if root not in file_path.parents:
+        raise ValueError(f"{uri!r} resolves to {file_path}, outside of {root}")
+    return file_path
+
+
 def handle_withdraw_element(
     output_path, verify_only, elem: WithdrawElement, effective_uri
 ):
-    file_path = output_path / f"./{urllib.parse.urlparse(effective_uri).path}"
+    file_path = output_file_path(output_path, effective_uri)
     if file_path.exists():
         h_disk = hashlib.sha256(file_path.read_bytes()).hexdigest()
 
@@ -140,10 +185,7 @@ def handle_withdraw_element(
 def handle_publish_element(
     output_path, verify_only, parse_for_time, elem: PublishElement, effective_uri
 ):
-    tokens = urllib.parse.urlparse(effective_uri)
-    file_path = output_path / f"./{tokens.path}"
-    # Ensure that output dir is a subdirectory and create if necessary
-    assert output_path in file_path.parents
+    file_path = output_file_path(output_path, effective_uri)
 
     # publish with hash -> overwrite, check old hash
     if elem.previous_hash:

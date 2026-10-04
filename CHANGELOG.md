@@ -4,6 +4,16 @@
 
   * Use ansible podman support to manage containers
   * 45s timeout for container
+  * Pin GitHub Actions to commit hashes
+  * Validate snapshot hash when reconstruct downloads a notification URL
+  * Read and write sync config with tomlkit (fixes unescaped strings in generated config); validate generated config before replacing the existing one
+  * Reject RRDP object URIs that resolve outside the reconstruct output directory (publish and withdraw)
+  * Limit HTTP response bodies to 2 GiB (decompressed), as MAX_CONTENTLEN in rpki-client
+  * Stream snapshot and delta downloads to disk instead of buffering them in memory
+  * Only follow same-origin redirects, and require snapshot/delta URIs on the notification's origin (as rpki-client)
+  * Limit notification files to 16 MiB
+  * `snapshot-rrdp` and `sync-rrdp`: download the snapshot/deltas of a repository with workers instead of `asyncio.gather`. The first failed file no longer fails the run for the repository.
+  * Remove dependencies used by workbooks
 
 ## v0.5.0:
   * Recognisable user-agent, which is configurable for RRDP sync.

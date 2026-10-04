@@ -10,9 +10,19 @@ from pathlib import Path
 import aiohttp
 import click
 
-from .http_client import client_session
+from .http_client import (
+    MAX_NOTIFICATION_SIZE,
+    CrossOriginError,
+    client_session,
+    read_error_body,
+    read_limited,
+    restrict_origin,
+    same_origin,
+    write_limited,
+)
 from .logging_config import LOG_LEVELS, configure_logging
 from .rrdp import parse_notification_file
+from .workers import run_workers
 
 LOG = logging.getLogger(__name__)
 
@@ -86,23 +96,27 @@ async def get_and_check(
         LOG.debug("Getting %s h=%s target_file=%s", uri, expected_hash, target_file)
 
         t0 = time.time()
-        res = await session.get(uri)
+        # Redirects stay in the origin of the (overridden) URI.
+        res = await session.get(uri, middlewares=(restrict_origin(uri),))
         if res.status != 200:
-            reason = await res.read()
+            reason = await read_error_body(res)
             LOG.error("HTTP %d for %s: %s", res.status, uri, reason)
             raise ValueError(f"HTTP {res.status} for {uri}")
-        content = await res.read()
-        LOG.debug("%s %.2f %db", uri, time.time() - t0, len(content))
+        # Stream to a temporary file, only keep it if the hash matches.
+        tmp_file = target_file.with_name(target_file.name + ".tmp")
+        try:
+            with tmp_file.open("wb") as f:
+                digest, size = await write_limited(res, f)
+            LOG.debug("%s %.2f %db", uri, time.time() - t0, size)
 
-        digest = hashlib.sha256(content).hexdigest()
+            if digest != expected_hash:
+                raise ValueError(
+                    f"Hash mismatch for {uri}. Expected {expected_hash} actual {digest}"
+                )
+            os.replace(tmp_file, target_file)
+        finally:
+            tmp_file.unlink(missing_ok=True)
 
-        if digest != expected_hash:
-            raise ValueError(
-                f"Hash mismatch for {uri}. Expected {expected_hash} actual {digest}"
-            )
-
-    with target_file.open("wb") as f:
-        f.write(content)
     set_time_from_headers(res, target_file)
     return True
 
@@ -127,17 +141,23 @@ async def snapshot_rrdp(
         session = client_session()
     try:
         LOG.debug("GET %s", notification_url)
-        res = await session.get(notification_url)
+        res = await session.get(
+            notification_url, middlewares=(restrict_origin(notification_url),)
+        )
         if res.status != 200:
             LOG.error(
                 "HTTP %d from RRDP server for %s, aborting: %s",
                 res.status,
                 notification_url,
-                await res.text(),
+                await read_error_body(res),
             )
             return
 
-        notification = parse_notification_file(await res.text())
+        # Parsed as a whole, so collect the chunks.
+        notification_content = b"".join(
+            [chunk async for chunk in read_limited(res, MAX_NOTIFICATION_SIZE)]
+        )
+        notification = parse_notification_file(notification_content.decode("utf-8"))
 
         LOG.info(
             "%s serial=%s session_id=%s",
@@ -151,12 +171,24 @@ async def snapshot_rrdp(
                 f"No session_id in notification file for {notification_url}"
             )
 
+        # Fetch all deltas (unlike rpki-client's MAX_RRDP_DELTAS window): we
+        # archive the full repository state. See DESIGN.md.
+        deltas = notification.deltas[:limit_deltas]
+        # As rpki-client: files must be in the origin of the notification.
+        uris = [delta.uri for delta in deltas]
+        if not skip_snapshot:
+            uris.append(notification.snapshot.uri)
+        for uri in uris:
+            if not same_origin(uri, notification_url):
+                raise CrossOriginError(
+                    f"{uri} in {notification_url} is not in the origin of the notification"
+                )
+
         if include_session:
             output_path = output_path / notification.session_id
             output_path.mkdir(parents=True, exist_ok=True)
 
         # Document is valid, store notification
-        notification_content = await res.read()
         if store_notification:
             if include_hash:
                 notification_hash = hashlib.sha256(notification_content).hexdigest()
@@ -174,47 +206,47 @@ async def snapshot_rrdp(
             f.write(notification_content)
         set_time_from_headers(res, notification_file)
 
-        queue = []
-
+        # (file name, uri, hash); a fixed number of workers fetch these, so a
+        # notification with many deltas does not create a task per file.
+        files = [(f"{delta.serial}.xml", delta.uri, delta.hash) for delta in deltas]
         if not skip_snapshot:
-            file_name = f"snapshot-{notification.serial}.xml"
-            queue.append(
-                get_and_check(
-                    sem,
-                    session,
-                    output_path,
-                    file_name,
+            files.insert(
+                0,
+                (
+                    f"snapshot-{notification.serial}.xml",
                     notification.snapshot.uri,
                     notification.snapshot.hash,
-                    override_host=override_host,
-                    hash_in_name=include_hash,
-                )
+                ),
             )
 
-        for idx, delta in enumerate(notification.deltas):
-            if limit_deltas is not None and idx >= limit_deltas:
-                break
-            file_name = f"{delta.serial}.xml"
-            queue.append(
-                get_and_check(
-                    sem,
-                    session,
-                    output_path,
-                    file_name,
-                    delta.uri,
-                    delta.hash,
-                    override_host=override_host,
-                    hash_in_name=include_hash,
-                )
+        async def fetch(file: tuple[str, str, str]) -> bool:
+            file_name, uri, sha256 = file
+            return await get_and_check(
+                sem,
+                session,
+                output_path,
+                file_name,
+                uri,
+                sha256,
+                override_host=override_host,
+                hash_in_name=include_hash,
             )
 
-        status_per_file = await asyncio.gather(*queue)
+        # Failures do not stop the other files, the repository fails after.
+        downloaded, failures = await run_workers(files, fetch, threads)
+        for (_, uri, _), e in failures:
+            LOG.error("%s: failed to get %s: %s", notification_url, uri, e)
+
         LOG.info(
             "%s: %d files are present. Downloaded %d files.",
             notification_url,
-            len(queue),
-            sum(status_per_file),
+            len(files) - len(failures),
+            sum(downloaded),
         )
+        if failures:
+            raise ValueError(
+                f"{notification_url}: {len(failures)}/{len(files)} files failed"
+            ) from failures[0][1]
     finally:
         if owns_session:
             await session.close()

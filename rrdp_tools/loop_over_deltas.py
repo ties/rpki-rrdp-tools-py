@@ -9,8 +9,9 @@ from pathlib import Path
 import aiohttp
 import click
 
-from .http_client import client_session
+from .http_client import client_session, restrict_origin, write_limited
 from .logging_config import LOG_LEVELS, configure_logging
+from .workers import run_workers
 
 LOG = logging.getLogger(__name__)
 
@@ -21,18 +22,17 @@ class Download:
     uri: str
 
 
-async def get_and_check(
-    i: int, session: aiohttp.ClientSession, download: Download
-) -> None:
+async def get_and_check(session: aiohttp.ClientSession, download: Download) -> None:
     t0 = time.time()
-    async with session.get(download.uri) as response:
-        LOG.debug("[%d] HTTP %d %.3fs", i, response.status, time.time() - t0)
+    async with session.get(
+        download.uri, middlewares=(restrict_origin(download.uri),)
+    ) as response:
+        LOG.debug("%s: HTTP %d %.3fs", download.uri, response.status, time.time() - t0)
         if response.status == 200:
-            body = await response.read()
-            await asyncio.to_thread(download.target_file.write_bytes, body)
+            with download.target_file.open("wb") as f:
+                await write_limited(response, f)
             LOG.info(
-                "[%d] Downloaded %s to %s in %.3fs",
-                i,
+                "Downloaded %s to %s in %.3fs",
                 download.uri,
                 download.target_file,
                 time.time() - t0,
@@ -41,45 +41,24 @@ async def get_and_check(
             raise ValueError(f"Got status {response.status} for {download.uri}")
 
 
-async def worker(
-    i: int, session: aiohttp.ClientSession, queue: asyncio.Queue[Download]
-) -> int:
-    processed = 0
-    while not queue.empty():
-        download = await queue.get()
-        processed += 1
-        try:
-            await get_and_check(i, session, download)
-        except Exception as e:  # noqa: BLE001
-            LOG.error(e)
-        finally:
-            queue.task_done()
-
-    return processed
-
-
 async def attempt_delta_download(
     url_template: str, base_path: Path, min_delta: int, max_delta: int
 ) -> None:
-    queue = asyncio.Queue()
-
-    for delta_number in range(min_delta, max_delta):
-        await queue.put(
-            Download(
-                base_path / f"{delta_number}.xml", url_template.format(delta_number)
-            )
-        )
+    downloads = [
+        Download(base_path / f"{delta_number}.xml", url_template.format(delta_number))
+        for delta_number in range(min_delta, max_delta)
+    ]
 
     async with client_session() as session:
-        workers = [
-            worker(i, session, queue) for i in range(multiprocessing.cpu_count())
-        ]
+        _, failures = await run_workers(
+            downloads,
+            lambda download: get_and_check(session, download),
+            multiprocessing.cpu_count(),
+        )
 
-        statuses = await asyncio.gather(*workers)
-        await queue.join()
-
-        for status in statuses:
-            LOG.info("Processed %d downloads", status)
+    for _, e in failures:
+        LOG.error(e)
+    LOG.info("Processed %d downloads, %d failed", len(downloads), len(failures))
 
 
 @click.command()

@@ -1,5 +1,6 @@
 import os
 import re
+from collections.abc import Callable
 from pathlib import Path
 
 import click
@@ -8,6 +9,7 @@ from .sharding import Shard
 from .sync_config import (
     config_from_notification_urls,
     format_toml,
+    load_config,
     notification_url_error,
 )
 
@@ -18,11 +20,19 @@ def parse_metrics_file(content: str) -> list[str]:
     return sorted(urls)
 
 
-def write_atomically(path: Path, content: str) -> None:
-    """Replace `path` without exposing partial content to readers."""
+def write_atomically(
+    path: Path, content: str, validate: Callable[[Path], object] | None = None
+) -> None:
+    """Replace `path` without exposing partial content to readers.
+
+    `validate` is called on the temporary file first; if it raises, `path`
+    is left untouched.
+    """
     tmp = path.with_name(path.name + ".tmp")
     try:
         tmp.write_text(content)
+        if validate:
+            validate(tmp)
         os.replace(tmp, path)
     except BaseException:
         tmp.unlink(missing_ok=True)
@@ -129,7 +139,8 @@ def import_rrdp_repos_from_metrics_command(
     toml_str = format_toml(config)
 
     if output:
-        write_atomically(output, toml_str)
+        # Keep the previous config if the generated one does not load.
+        write_atomically(output, toml_str, validate=load_config)
         click.echo(f"Wrote config with {len(usable)} repositories to {output}")
     else:
         click.echo(toml_str, nl=False)
